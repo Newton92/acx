@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+{% load static %}
+{% load l10n %}
+{% load i18n %}
+<html lang="en" class="body-full-height">
+    <head>
+        <!-- META SECTION -->
+        <title>IDP - UBA CHAD</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+        <link rel="icon" href="{% static 'img/favicon.ico' %}" type="image/x-icon" />
+        <!-- END META SECTION -->
+
+        <!-- CSS INCLUDE -->
+          <link rel="stylesheet" type="text/css" id="theme" href="{% static 'css/theme-default.css' %}"/>
+        <!-- EOF CSS INCLUDE -->
+    </head>
+    <style>
+
+        html, body {
+        margin: 0;
+        padding: 0;
+    }
+
+        body {
+            background-image: url("{% static 'img/bg_ss1.jpg' %}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        /*body::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.1); /* Couleur blanche avec une opacité de 0.3 (ajustez selon vos besoins) */
+        }*/
+
+        .footer-bottom {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            background-color: white; /* Ajoutez la couleur de fond de votre choix */
+            color: white;
+            text-align: center;
+            padding: 10px 0; /* Ajoutez un padding selon vos préférences */
+        }
+
+
+    </style>
+
+    <body>
+
+    <nav class="navbar " style="background:#ffffffb8; border-radius:0px; height:85px">
+      <div class="container-fluid">
+
+        <div class="navbar-header">
+          <a class="navbar-brand" href="#" style="font-size:25px; padding-top:18px; color:#e20f00"> <B>IT DRIVE PLATFORM</B> </a>
+        </div>
+
+        <ul class="nav navbar-nav">
+            <li class="xn-icon-button pull-right"><br>
+                <form action="{% url 'set_language' %}" method="post">{% csrf_token %}
+                  <input name="next" type="hidden" value="{{ redirect_to }}">
+                  <select name="language" onchange="this.form.submit()" style="" class="form-control" >
+                      {% get_current_language as LANGUAGE_CODE %}
+                      {% get_available_languages as LANGUAGES %}
+                      {% get_language_info_list for LANGUAGES as languages %}
+                      {% for language in languages %}
+                          <option value="{{ language.code }}"{% if language.code == LANGUAGE_CODE %} selected{% endif %}>
+                              {{ language.name_local |title}} ({{ language.code |title}})
+                          </option>
+                      {% endfor %}
+                  </select>
+                </form>
+            </li>
+        </ul>
+
+        <a class="navbar-brand" href="#" style="float: right;">
+            <img src="{% static 'img/UBA-Logo.svg' %}" alt="" width="140px">
+        </a>
+
+      </div>
+
+
+
+    </nav>
+
+
+
+
+
+
+        <div class="login-container" style="">
+
+
+
+             <center>
+                {% if form.non_field_errors %}
+                  <ul class='form-errors col-md-12'>
+                      {% for error in form.non_field_errors %}
+
+                     <div class="alert alert-danger alert-dismissible " role="alert">
+                                  <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">×</span>
+                                  </button>
+                                  <strong>{{ error }}!</strong>
+                                </div>
+                      {% endfor %}
+                  </ul>
+                {% endif %}
+
+              </center>
+
+            <div class="row">
+
+
+
+
+            <div class="col-md-12">
+                        <div class="login-box animated fadeInDown">
+                    <br>
+                    <div class="login-body"  style="border: 1px solid white;  background: #ffffffb8; width:300px;border-radius:10px">
+                        <div class="text-center">
+                        </div>
+                            <form class="form-horizontal" method="POST">
+                            {% csrf_token %}
+                            <center><span style="color: #e20f00; font-size: 20px;"> <b> {% trans "BIENVENUE" %}</b> </span></center>
+                             <br/>
+
+                        <div class="form-group">
+                            <div class="col-md-12">
+                                <input title="{% trans 'Veuillez saisir votre login' %}" type="text" required style="color:black" name="username" class="form-control" placeholder="Login"/>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="col-md-12">
+                                <input title="{% trans 'Veuillez saisir votre mot de passe' %}" type="password" required style="color:black" name="password" class="form-control" placeholder="{% trans 'Mot de passe' %}"/>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="col-md-6">
+
+                                <label class="check"><input type="checkbox" class="icheckbox" checked="checked"> {% trans 'Rester connecter' %}</label>
+
+                            </div>
+                            <div class="col-md-12" style="  ">
+                                <button title="Cliquer pour se connecter" class="btn btn-info btn-block" type="submit" style="border-radius: 5px; height: 30px; background:#e20f00; border-color:#e20f00">{% trans "Se connecter" %}</button>
+                            </div>
+                        </div>
+                        <br>
+                        </form>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            </div>
+
+        </div>
+        <div class="footer-bottom">
+            <div class="container">
+                <div class="row">
+                    <p class="pull-right" style="color:white">Copyright  &copy;  2024 IT DRIVE PLATEFORM par <b>UBA CHAD</b> Tous doits réservés.</p>
+                </div>
+            </div>
+        </div>
+
+
+
+
+
+    </body>
+</html>
+
+
+
+
+
+

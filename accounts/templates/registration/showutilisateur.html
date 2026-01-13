@@ -1,0 +1,94 @@
+
+{% extends fic_tmplate %}
+{% load i18n %}
+
+{% load widget_tweaks %}
+{% load static %}
+{% block title %} Rapport |Rapport {% endblock %}
+{% load avatar_tags %}
+
+    {% block content %}
+
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'antenne:home' %}">Tableau de bord</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Lister les utilisateurs</li>
+          </ol>
+        </nav>
+
+        {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+            <center style="color:green"><h4  {% if message.tags %} class=" {{ message.tags }} " {% endif %}> {{ message }} </h4></center>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+
+<div class="row">
+    <div class="col-md-12">
+
+        <div class="panel panel-default">
+
+            <div class="panel-heading">
+                <h3 class="panel-title" style="text-transform: uppercase"> <i class="fa fa-user"></i> utilisateurs</h3>
+                <div class="btn-group pull-right">
+                    <ul class="panel-controls">
+                        <li><a title="Cliquer pour ajouter une nouvel utilisateur" href="{% url 'accounts:signup' %}"  style="background:#83cb2c;color:white" ><span class="fa fa-plus"></span> </a></li>
+                    </ul>
+                </div>
+            </div>
+
+
+                  <div class="x_content">
+                      <div class="row">
+                          <div class="col-sm-12">
+                            <div class="card-box table-responsive">
+                    <p class="text-muted font-13 m-b-30">
+
+                    </p>
+
+                <table  id="data_table_perso_user_liste" class="display" >
+                      <thead>
+                        <tr>
+                          <th>{% trans "PHOTO" %}</th>
+                          <th>{% trans "LOGIN" %}</th>
+                          <th>{% trans "NOM" %}</th>
+                          <th>{% trans "PRENOM" %}</th>
+                          <th>{% trans "TELEPHONE" %}</th>
+                          <th>{% trans "EMAIL" %}</th>
+                          <th>{% trans "SPECIALITE" %}</th>
+                          <th>{% trans "CENTRE" %}</th>
+                          <th>ACTIONS</th>
+                        </tr>
+
+                      </thead>
+                        <tbody>
+                           {% for cmd in utilisateurs %}
+                           <tr>
+                           <td>{% avatar cmd %}</td>
+                           <td>{{ cmd.username |default_if_none:"" }}</td>
+                           <td>{{ cmd.first_name |default_if_none:"" }}</td>
+                           <td>{{ cmd.last_name |default_if_none:"" }}</td>
+                           <td>{{ cmd.telephone |default_if_none:"" }}</td>
+                           <td>{{ cmd.email |default_if_none:"" }}</td>
+                           <td>{{ cmd.specialite |default_if_none:"" }}</td>
+                           <td>{{ cmd.center |default_if_none:"" }}</td>
+                           <td>
+                               <a href="{% url 'accounts:editutilisateur' cmd.pk  %}"   class="btn btn-primary btn-rounded " style="" title="Modifier "><i class="fa fa-edit"></i></a>
+                               <a href="" class="btn btn-danger btn-rounded " title="Bloquer"><i class="fa fa-lock"></i></a>
+                           </td>
+                               
+                           </tr>
+                            {% endfor %}
+
+                        </tbody>
+                    </table>
+
+                                </div>
+        </div>
+    </div>
+</div>
+        </div></div></div>
+
+{% endblock %}

@@ -1,0 +1,97 @@
+{% extends fic_tmplate %}
+{% load i18n %}
+
+{% load widget_tweaks %}
+{% load static %}
+{% block title %} Rapport |Rapport {% endblock %}
+
+    {% block content %}
+
+          <div class="">
+            <div class="page-title">
+
+
+            </div>
+        {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+            <center style="color:green"><h4  {% if message.tags %} class=" {{ message.tags }} " {% endif %}> {{ message }} </h4></center>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+            <div class="row">
+              <div class="col-md-12 col-sm-12 ">
+                <div class="x_panel">
+                  <div class="x_title">
+                    <h2>{% trans "Modifier un utilisateur" %}<small></small></h2>
+
+
+                    <div class="clearfix"></div>
+                  </div>
+                  <div class="x_content">
+                       <form action="{% url 'accounts:update' utilisateur.id %}" method="POST">
+                                {% csrf_token %}
+                                {% for hidden_field in form.hidden_fields %}
+                                {{ hidden_field }}
+                                {% endfor %}
+
+
+
+                                {% for field in form.visible_fields %}
+                                <div class="form-group col col-md-3">
+                                    {{ field.label_tag }}{{ field.errors }}
+                                    {% render_field field class="form-control" %}
+                                    {% if field.help_text %}
+                                    <small class="form-text text-muted">{{ field.help_text }}</small>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+
+
+                                <div class="form-group col col-md-12">
+                                       <button type="submit" class="btn btn-primary">Modifier</button>
+                                </div>
+
+                        </form>
+                  </div>
+
+
+
+
+{% endblock %}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+{% load i18n %}
+{% load static %}
+
+<!DOCTYPE html>
+
+
+
+<!-- This is the signup view template, edit or replace, whatever suits you. -->
+<html>
+    <head>
+        <title>Sign up</title>
+    </head>
+    <body>
+        <form action="{% url 'accounts:signup' %}" method="POST">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit">Save</button>
+        </form>
+    </body>
+</html>

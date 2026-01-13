@@ -1,0 +1,126 @@
+{% load i18n %}
+{% load static %}
+
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <!-- Meta, title, CSS, favicons, etc. -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Bucrep | Login</title>
+    <link rel="stylesheet" href="{% static 'bootstrap/dist/css/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'font-awesome/css/font-awesome.min.css' %}">
+    <link rel="stylesheet" href="{% static 'nprogress/nprogress.css' %}">
+    <link rel="stylesheet" href="{% static 'iCheck/skins/flat/green.css' %}">
+    <link rel="stylesheet" href="{% static 'bootstrap-progressbar/css/bootstrap-progressbar-3.3.4.min.css' %}">
+    <link rel="stylesheet" href="{% static 'google-code-prettify/bin/prettify.min.css' %}">
+    <link rel="stylesheet" href="{% static 'select2/dist/css/select2.min.css' %}">
+    <link rel="stylesheet" href="{% static 'switchery/dist/switchery.min.css' %}">
+    <link rel="stylesheet" href="{% static 'starrr/dist/starrr.css' %}">
+    <link rel="stylesheet" href="{% static 'animate.css/animate.min.css' %}">
+    <link rel="stylesheet" href="{% static 'build/css/custom.min.css' %}">
+    <!-- Custom Theme Style -->
+  </head>
+
+  <body class="login" style="background-image:url({% static 'images/login.jpg'  %} );">
+
+    <center>
+        {% if form.non_field_errors %}
+          <ul class='form-errors'>
+        {% for error in form.non_field_errors %}
+
+       <div class="alert alert-danger alert-dismissible " role="alert">
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">×</span>
+                    </button>
+                    <strong>{{ error }}!</strong>
+                  </div>
+        {% endfor %}
+    </ul>
+{% endif %}
+
+      </center>
+    <div>
+      <a class="hiddenanchor" id="signup"></a>
+      <a class="hiddenanchor" id="signin"></a>
+
+      <div class="login_wrapper">
+        <div class="animate form login_form" style="background-color:#3b275d; padding: 40px;border-radius: 40px;">
+          <section class="login_content">
+
+            <img src="{% static 'images/logo.png'  %}" style="background-color: #fff; padding: 20px; border-radius: 40px;">
+
+            <form action="" method="POST">
+              {% csrf_token %}
+              <h1 >Connectez-vous</h1>
+              <div>
+                <input type="text" class="form-control" placeholder="Username" name="username" required="" />
+              </div>
+              <div>
+                <input type="password" class="form-control" placeholder="Password" name="password" required="" />
+              </div>
+              <div>
+
+                <button type="submit" class="btn btn-info" style="background:#3b275d; ">Se connecter</button>
+                <a class="reset_pass" href="#">Motde passe oublié?</a>
+              </div>
+
+              <div class="clearfix"></div>
+
+              <div class="separator">
+
+
+                <div class="clearfix"></div>
+                <br />
+
+                <div>
+
+                  <p>©2020 Acremac Tous droits Reservés. By <a target="_blank" href="http://informastre.com">Informastre</a></p>
+                </div>
+              </div>
+            </form>
+          </section>
+        </div>
+
+        <div id="register" class="animate form registration_form">
+          <section class="login_content">
+            <form>
+              <h1>Create Account</h1>
+              <div>
+                <input type="text" class="form-control" placeholder="Username" required="" />
+              </div>
+              <div>
+                <input type="email" class="form-control" placeholder="Email" required="" />
+              </div>
+              <div>
+                <input type="password" class="form-control" placeholder="Password" required="" />
+              </div>
+              <div>
+                <a class="btn btn-default submit" href="index.html">Submit</a>
+              </div>
+
+              <div class="clearfix"></div>
+
+              <div class="separator">
+                <p class="change_link">Already a member ?
+                  <a href="#signin" class="to_register"> Log in </a>
+                </p>
+
+                <div class="clearfix"></div>
+                <br />
+
+                <div>
+                  <h1><i class="fa fa-paw"></i> Bucrep</h1>
+                  <p>©2020 All Rights Reserved. Gentelella Alela!</p>
+                </div>
+              </div>
+            </form>
+          </section>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

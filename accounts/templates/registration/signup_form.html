@@ -1,0 +1,69 @@
+{% extends fic_tmplate %}
+{% load i18n %}
+
+{% load widget_tweaks %}
+{% load static %}
+{% block title %} Rapport |Rapport {% endblock %}
+
+    {% block content %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'antenne:home' %}">Tableau de bord</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Ajouter un utilisateur</li>
+  </ol>
+</nav>
+
+          <div class="">
+            <div class="page-title">
+
+
+            </div>
+        {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+            <center style="color:green"><h4  {% if message.tags %} class=" {{ message.tags }} " {% endif %}> {{ message }} </h4></center>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+            <div class="row">
+              <div class="col-md-12 col-sm-12 ">
+                <div class="x_panel">
+                  <div class="x_title">
+                    <h2>{% trans "Ajout d'utilisateur" %}<small></small></h2>
+
+
+                    <div class="clearfix"></div>
+                  </div>
+                  <div class="x_content">
+                       <form action="{% url 'accounts:savesignup' %}" method="POST" enctype="multipart/form-data">
+                             {% csrf_token %}
+                    {% for hidden_field in form.hidden_fields %}
+                    {{ hidden_field }}
+                    {% endfor %}
+
+
+                    {% for field in form.visible_fields %}
+                        <div class="form-group col col-md-3">
+                            {{ field.label_tag }}<b style="color:red">{{ field.errors }}</b>
+                            {% render_field field class="form-control" %}
+                            {% if field.help_text %}
+                            <small class="form-text text-muted">{{ field.help_text }}</small>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+
+
+                    <div class="form-group col col-md-12">
+                           <button type="submit" class="btn btn-primary">Enregistrer</button>
+                    </div>
+
+
+                        </form>
+                  </div>
+
+
+
+
+{% endblock %}

@@ -1,0 +1,139 @@
+###################################
+# PYTHON
+###################################
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+*.pyo
+
+###################################
+# DJANGO
+###################################
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+*.sqlite3
+
+# Migrations temporaires (à ignorer si besoin)
+# **/migrations/*.py
+# !**/migrations/__init__.py
+
+###################################
+# ENVIRONNEMENT & SECRETS
+###################################
+.env
+.env.*
+*.env
+.env.local
+.env.dev
+.env.prod
+.env.test
+
+###################################
+# MEDIA & STATIC
+###################################
+media/
+staticfiles/
+static_root/
+
+###################################
+# COLLECTSTATIC
+###################################
+/static/
+
+###################################
+# CELERY / REDIS
+###################################
+celerybeat-schedule
+celerybeat.pid
+
+###################################
+# CACHE / SESSIONS
+###################################
+.cache/
+.sessions/
+
+###################################
+# LOGS
+###################################
+logs/
+*.log
+*.out
+
+###################################
+# TESTS / COVERAGE
+###################################
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.tox/
+
+###################################
+# EXPORTS / IMPORTS
+###################################
+*.csv
+*.xls
+*.xlsx
+*.ods
+*.pdf
+*.zip
+*.rar
+
+###################################
+# DOCKER
+###################################
+.env.docker
+docker-compose.override.yml
+
+###################################
+# IDE - VSCODE
+###################################
+.vscode/
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+###################################
+# IDE - PYCHARM
+###################################
+.idea/
+*.iml
+
+###################################
+# OS
+###################################
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+###################################
+# VIRTUAL ENVIRONMENTS
+###################################
+venv/
+.venv/
+env/
+ENV/
+
+###################################
+# NODE (si frontend intégré)
+###################################
+node_modules/
+dist/
+build/
+
+###################################
+# TEMP FILES
+###################################
+*.tmp
+*.swp
+*.bak
+###################################
+# DJANGO MIGRATIONS
+###################################
+**/migrations/*.pyc
+**/migrations/__pycache__/
