@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Création de compte</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f4f6f8;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      background-color: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .header {
+      background-color: #42210b;
+      color: #ffffff;
+      padding: 20px;
+      text-align: center;
+    }
+    .content {
+      padding: 30px;
+      color: #333333;
+      line-height: 1.6;
+    }
+    .button {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 12px 20px;
+      background-color: #ea8c21;
+      color: #ffffff !important;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+    .footer {
+      padding: 15px;
+      text-align: center;
+      font-size: 12px;
+      color: #888888;
+      background-color: #fafafa;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="header">
+      <h2>Bienvenue sur ACX</h2>
+    </div>
+
+    <div class="content">
+      <p>Bonjour <strong>{{ full_name }}</strong>,</p>
+
+      <p>
+        Votre compte a été créé avec succès sur la plateforme <strong>ACX</strong>.
+      </p>
+
+      <p>
+        Pour finaliser votre accès, nous vous invitons à vous rapprocher de
+        l’administrateur de votre organisation afin d’obtenir vos identifiants
+        de connexion.
+      </p>
+
+      <a href="{{ login_url }}" class="button">
+        Accéder à la plateforme
+      </a>
+
+      <p style="margin-top: 30px;">
+        Cordialement,<br>
+        <strong>L’équipe ACX</strong>
+      </p>
+    </div>
+
+    <div class="footer">
+      © {{ year }} ACX – Tous droits réservés
+    </div>
+  </div>
+
+</body>
+</html>

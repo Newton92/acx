@@ -1,3 +1,8 @@
+from django.core.mail import send_mail, EmailMultiAlternatives
+from django.template import context
+from django.template.loader import render_to_string
+
+from django.utils.html import strip_tags
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 
@@ -219,9 +224,40 @@ class LogoutView(APIView):
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+from django.conf import settings
 
-def testmail(request):
-    permission_classes = [IsAuthenticated]
+from django.conf import settings
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
 
-    print("bonjou")
+
+def testmail(
+    subject="Test email ACX",
+    template_name="emails/account_created.html",
+    context=None,
+    recipient_list=None,
+):
+    if context is None:
+        context = {
+            "full_name": "Issa PEROU",
+            "login_url": "http://localhost:3000/login",
+            "year": 2026,
+        }
+
+    if recipient_list is None:
+        recipient_list = ["ngssalapel@gmail.com", 'issa.perou@acremac.com']
+
+    html_content = render_to_string(template_name, context)
+    text_content = strip_tags(html_content)
+
+    email = EmailMultiAlternatives(
+        subject=subject,
+        body=text_content,
+        from_email=settings.DEFAULT_FROM_EMAIL,  # ⚠️ doit rester noreply@sedf.com (ou ton user SMTP)
+        to=recipient_list,
+    )
+    email.attach_alternative(html_content, "text/html")
+    email.send(fail_silently=False)
+
 

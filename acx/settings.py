@@ -83,7 +83,7 @@ ROOT_URLCONF = 'acx.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        "DIRS": [BASE_DIR / "templates"],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -106,7 +106,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',  # Ou 'django.db.backends.postgresql_psycopg2'
         'NAME': 'acx_db',
         'USER': 'postgres',
-        'PASSWORD': 'pel',
+        'PASSWORD': '1651221@$Ng',
         'HOST': '127.0.0.1',
         'PORT': '5432',
     }
@@ -163,7 +163,6 @@ SIMPLE_JWT = {
 
 
 FRONTEND_BASE_URL = "http://localhost:3000"   # ou http://localhost:3000
-DEFAULT_FROM_EMAIL = "acx.acremac.com"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -195,10 +194,18 @@ EMAIL_HOST_PASSWORD = 'Venice@678'
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER"""
 
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'ubagroup.com'      # à confirmer avec cPanel (ou smtp.it-expertises.com si dispo)
-EMAIL_PORT = 25
-EMAIL_USE_SSL = True                  # IMPORTANT pour port 465
-EMAIL_USE_TLS = False
-EMAIL_HOST_USER = 'ubachad.creditnotify@ubagroup.com'
-EMAIL_HOST_PASSWORD = 'Venice@678'
+"""'EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'"""
+EMAIL_BACKEND = "core.email_backend.InsecureEmailBackend"
+
+
+
+
+DEFAULT_FROM_EMAIL = "acx@acremac.com"
+SERVER_EMAIL = "acx@acremac.com"
+
+EMAIL_HOST_USER = "acx@acremac.com"
+EMAIL_HOST_PASSWORD = 'v4>&3k=71Z+"'
+EMAIL_HOST = "3.236.213.114"
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
