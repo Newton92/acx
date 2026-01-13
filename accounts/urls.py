@@ -1,11 +1,13 @@
 #accounts/urls.py
+from tkinter.font import names
+
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from cases.views_customer_portal_cases import CustomerPortalCaseDetailView
 from customers.views import CustomerPortalMeView
 from .views import UserViewSet, RoleViewSet, TenantMembershipViewSet, MembershipViewSet, AuditLogViewSet, \
-    SessionViewSet, LogoutView
+    SessionViewSet, LogoutView, testmail
 from .views_tenant_users import tenant_users, tenant_user_update, tenant_user_toggle_active, \
     tenant_user_membership_update, tenant_user_remove
 
@@ -45,6 +47,10 @@ router.register(r"sessions", SessionViewSet, basename="sessions")
 
 
 urlpatterns = [
+
+
+    path('test_mail', testmail, name="test_mail"),
+
     path("", include(router.urls)),
     path('', include('django.contrib.auth.urls')),
     path("auth/logout/", LogoutView.as_view(), name="auth-logout"),

@@ -163,7 +163,7 @@ SIMPLE_JWT = {
 
 
 FRONTEND_BASE_URL = "http://localhost:3000"   # ou http://localhost:3000
-DEFAULT_FROM_EMAIL = "ngssalapel@gmail.com"
+DEFAULT_FROM_EMAIL = "acx.acremac.com"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -181,3 +181,24 @@ FRONTEND_CLIENT_PORTAL_BASE_URL = "http://localhost:3000/fr"  # ou sans /fr si t
 ACX_TENANT_MODEL = "tenancy.Tenant"              # ton Tenant
 ACX_PORTFOLIO_MODEL = "cases.Portfolio"     # ton Portfolio
 ACX_DEBTOR_MODEL = "customers.Customer"
+
+
+"""
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'ubagroup.com'      # à confirmer avec cPanel (ou smtp.it-expertises.com si dispo)
+EMAIL_PORT = 25
+EMAIL_USE_SSL = True                  # IMPORTANT pour port 465
+EMAIL_USE_TLS = False
+EMAIL_HOST_USER = 'ubachad.creditnotify@ubagroup.com'
+EMAIL_HOST_PASSWORD = 'Venice@678'
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER"""
+
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'ubagroup.com'      # à confirmer avec cPanel (ou smtp.it-expertises.com si dispo)
+EMAIL_PORT = 25
+EMAIL_USE_SSL = True                  # IMPORTANT pour port 465
+EMAIL_USE_TLS = False
+EMAIL_HOST_USER = 'ubachad.creditnotify@ubagroup.com'
+EMAIL_HOST_PASSWORD = 'Venice@678'

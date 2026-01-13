@@ -218,3 +218,10 @@ class LogoutView(APIView):
             pass
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+def testmail(request):
+    permission_classes = [IsAuthenticated]
+
+    print("bonjou")
+
