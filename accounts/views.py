@@ -226,27 +226,33 @@ class LogoutView(APIView):
 
 from django.conf import settings
 
+
+
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
+from django.utils.timezone import now
 
 
 def testmail(
-    subject="Test email ACX",
-    template_name="emails/account_created.html",
-    context=None,
-    recipient_list=None,
-):
+        subject="Test email ACX",
+        template_name="emails/account_created.html",
+        context=None,
+        recipient_list=None,
+    ):
+    if not isinstance(subject, str):
+        subject = str(subject)  # évite que request casse le subject
+
     if context is None:
         context = {
             "full_name": "Issa PEROU",
             "login_url": "http://localhost:3000/login",
-            "year": 2026,
+            "year": now().year,
         }
 
     if recipient_list is None:
-        recipient_list = ["ngssalapel@gmail.com", 'issa.perou@acremac.com']
+        recipient_list = ["ngssalapel@gmail.com"]
 
     html_content = render_to_string(template_name, context)
     text_content = strip_tags(html_content)
@@ -254,10 +260,11 @@ def testmail(
     email = EmailMultiAlternatives(
         subject=subject,
         body=text_content,
-        from_email=settings.DEFAULT_FROM_EMAIL,  # ⚠️ doit rester noreply@sedf.com (ou ton user SMTP)
+        from_email=settings.DEFAULT_FROM_EMAIL,
         to=recipient_list,
     )
     email.attach_alternative(html_content, "text/html")
     email.send(fail_silently=False)
+
 
 

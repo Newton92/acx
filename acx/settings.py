@@ -106,7 +106,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',  # Ou 'django.db.backends.postgresql_psycopg2'
         'NAME': 'acx_db',
         'USER': 'postgres',
-        'PASSWORD': '1651221@$Ng',
+        'PASSWORD': 'pel',
         'HOST': '127.0.0.1',
         'PORT': '5432',
     }

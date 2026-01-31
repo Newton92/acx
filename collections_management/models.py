@@ -1,3 +1,5 @@
+# collections_management/models.py
+
 from decimal import Decimal
 
 from django.apps import apps
@@ -5,6 +7,7 @@ from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
 
 
 def get_model_ref(setting_name: str, default: str) -> str:
@@ -75,11 +78,33 @@ class CollectionCase(TimeStampedModel):
     tenant = models.ForeignKey(TENANT_MODEL, on_delete=models.CASCADE, related_name="collection_cases")
     reference = models.CharField(max_length=32, db_index=True)  # ex: COL-2026-000123
 
-    portfolio = models.ForeignKey(PORTFOLIO_MODEL, on_delete=models.PROTECT, related_name="collection_cases", null=True, blank=True)
-    debtor = models.ForeignKey(DEBTOR_MODEL, on_delete=models.PROTECT, related_name="collection_cases", null=True, blank=True)
+    portfolio = models.ForeignKey(
+        PORTFOLIO_MODEL,
+        on_delete=models.PROTECT,
+        related_name="collection_cases",
+        null=True,
+        blank=True
+    )
+    debtor = models.ForeignKey(
+        DEBTOR_MODEL,
+        on_delete=models.PROTECT,
+        related_name="collection_cases",
+        null=True,
+        blank=True
+    )
 
-    status = models.CharField(max_length=20, choices=CollectionCaseStatus.choices, default=CollectionCaseStatus.NEW, db_index=True)
-    priority = models.CharField(max_length=10, choices=CollectionPriority.choices, default=CollectionPriority.MEDIUM, db_index=True)
+    status = models.CharField(
+        max_length=20,
+        choices=CollectionCaseStatus.choices,
+        default=CollectionCaseStatus.NEW,
+        db_index=True
+    )
+    priority = models.CharField(
+        max_length=10,
+        choices=CollectionPriority.choices,
+        default=CollectionPriority.MEDIUM,
+        db_index=True
+    )
 
     assigned_to = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -90,11 +115,21 @@ class CollectionCase(TimeStampedModel):
     )
 
     # Montants
-    principal_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"), validators=[MinValueValidator(0)])
-    interest_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"), validators=[MinValueValidator(0)])
-    penalty_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"), validators=[MinValueValidator(0)])
-    fees_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"), validators=[MinValueValidator(0)])
-    total_paid_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"), validators=[MinValueValidator(0)])
+    principal_amount = models.DecimalField(
+        max_digits=18, decimal_places=2, default=Decimal("0.00"), validators=[MinValueValidator(0)]
+    )
+    interest_amount = models.DecimalField(
+        max_digits=18, decimal_places=2, default=Decimal("0.00"), validators=[MinValueValidator(0)]
+    )
+    penalty_amount = models.DecimalField(
+        max_digits=18, decimal_places=2, default=Decimal("0.00"), validators=[MinValueValidator(0)]
+    )
+    fees_amount = models.DecimalField(
+        max_digits=18, decimal_places=2, default=Decimal("0.00"), validators=[MinValueValidator(0)]
+    )
+    total_paid_amount = models.DecimalField(
+        max_digits=18, decimal_places=2, default=Decimal("0.00"), validators=[MinValueValidator(0)]
+    )
 
     due_date = models.DateField(null=True, blank=True, db_index=True)
 
@@ -233,3 +268,62 @@ class Payment(TimeStampedModel):
             models.Index(fields=["tenant", "paid_at"]),
             models.Index(fields=["tenant", "method"]),
         ]
+
+
+# -------------------------------------------------------------------
+# ✅ Tenant resolver ACX (ROBUSTE) - remplace l'import fragile accounts.models
+# -------------------------------------------------------------------
+
+def get_active_tenant(request):
+    # 1) si tu as déjà un middleware qui injecte request.tenant
+    tenant = getattr(request, "tenant", None)
+    if tenant:
+        return tenant
+
+    # 2) sinon, on récupère via la membership active
+    user = getattr(request, "user", None)
+    if not user or not user.is_authenticated:
+        return None
+
+    # 3) resolve Membership sans import en dur (accounts ou tenancy)
+    Membership = None
+    for app_label in ("accounts", "tenancy"):
+        try:
+            Membership = apps.get_model(app_label, "Membership")
+            if Membership:
+                break
+        except Exception:
+            continue
+
+    if not Membership:
+        return None
+
+    try:
+        m = (
+            Membership.objects
+            .select_related("tenant")
+            .filter(user=user, status="active")
+            .order_by("-id")
+            .first()
+        )
+        return m.tenant if m else None
+    except Exception:
+        return None
+
+
+class TenantScopedViewSetMixin:
+    """
+    Force le scope tenant pour list/retrieve + impose tenant pour create.
+    """
+    def get_tenant(self):
+        tenant = get_active_tenant(self.request)
+        if not tenant:
+            raise ValidationError({"tenant": "Tenant context missing for this request."})
+        return tenant
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        try:
+            return qs.filter(tenant=self.get_tenant())
+        except Exception:
+            return qs
