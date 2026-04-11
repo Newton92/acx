@@ -147,8 +147,8 @@ DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="acx@acremac.com")
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
 # ── URLs frontaux ──────────────────────────────────────────────────────────────
-FRONTEND_BASE_URL = env("FRONTEND_BASE_URL", default="https://acremac.com")
-FRONTEND_CLIENT_PORTAL_BASE_URL = env("FRONTEND_CLIENT_PORTAL_BASE_URL", default="https://acremac.com/fr")
+FRONTEND_BASE_URL = env("FRONTEND_BASE_URL", default="https://acx-acremac.net")
+FRONTEND_CLIENT_PORTAL_BASE_URL = env("FRONTEND_CLIENT_PORTAL_BASE_URL", default="https://acx-acremac.net/fr")
 
 # ── Limites upload ─────────────────────────────────────────────────────────────
 ACX_CP_MAX_FILE_MB = 10
