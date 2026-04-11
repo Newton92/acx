@@ -1,0 +1,23 @@
+{{ subject|default:"ACX – Notification" }}
+
+{{ title|default:"Notification" }}
+{% if subtitle %}{{ subtitle }}{% endif %}
+
+{% if greeting %}{{ greeting }}{% endif %}
+
+{{ body_text|default:"" }}
+
+{% if case_reference or amount_due or due_date or debtor_name %}
+--- Dossier ---
+Référence: {{ case_reference|default:"" }}
+Débiteur: {{ debtor_name|default:"" }}
+Montant dû: {{ amount_due|default:"" }}
+Échéance: {{ due_date|default:"" }}
+{% endif %}
+
+{% if cta_url %}
+Lien: {{ cta_url }}
+{% endif %}
+
+{{ company_name|default:"ACX – Acremac Claims XMultigestion" }}
+{% if support_email %}Support: {{ support_email }}{% endif %}
