@@ -234,6 +234,14 @@ class PaymentPromise(TimeStampedModel):
         indexes = [models.Index(fields=["tenant", "status", "promised_date"])]
 
 
+
+class PaymentReceivedBy(models.TextChoices):
+    """Qui a réellement encaissé l'argent ?"""
+
+    ACX = "acx", "Encaissement ACX"
+    CUSTOMER_DIRECT = "customer_direct", "Paiement direct chez le client"
+
+
 class Payment(TimeStampedModel):
     tenant = models.ForeignKey(TENANT_MODEL, on_delete=models.CASCADE, related_name="payments")
     case = models.ForeignKey(CollectionCase, on_delete=models.CASCADE, related_name="payments")
@@ -256,6 +264,25 @@ class Payment(TimeStampedModel):
     reference = models.CharField(max_length=64, blank=True, default="")
     notes = models.TextField(blank=True, default="")
 
+
+    # Comptabilité / trésorerie minimaliste (entrées/sorties)
+    # - acx            : l'argent transite par ACX => mouvement de trésorerie IN
+    # - customer_direct: paiement réalisé directement chez le client => pas de mouvement trésorerie
+    received_by = models.CharField(
+        max_length=20,
+        choices=PaymentReceivedBy.choices,
+        default=PaymentReceivedBy.ACX,
+        db_index=True,
+    )
+    treasury_account = models.ForeignKey(
+        "treasury_management.TreasuryAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="collection_payments",
+        help_text="Compte de trésorerie ACX utilisé si received_by=acx.",
+    )
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -267,8 +294,126 @@ class Payment(TimeStampedModel):
         indexes = [
             models.Index(fields=["tenant", "paid_at"]),
             models.Index(fields=["tenant", "method"]),
+            models.Index(fields=["tenant", "received_by"]),
+            models.Index(fields=["tenant", "treasury_account"]),
         ]
 
+
+
+
+# -------------------------------------------------------------------
+# ✉️ Emails (ACX send + Outlook proof attach)
+# -------------------------------------------------------------------
+
+class CollectionEmailSource(models.TextChoices):
+    ACX = "acx", "ACX"
+    OUTLOOK = "outlook", "Outlook"
+    OTHER = "other", "Other"
+
+
+class CollectionEmailDirection(models.TextChoices):
+    OUTBOUND = "outbound", "Outbound"
+    INBOUND = "inbound", "Inbound"
+
+
+class CollectionEmailStatus(models.TextChoices):
+    DRAFT = "draft", "Draft"
+    QUEUED = "queued", "Queued"
+    SENT = "sent", "Sent"
+    FAILED = "failed", "Failed"
+    RECEIVED = "received", "Received"
+
+
+def _collection_email_upload_to(instance, filename: str) -> str:
+    # Stockage preuve (eml) + PJ
+    return f"collection_emails/{instance.tenant_id}/{instance.case_id}/{filename}"
+
+
+class CollectionEmail(TimeStampedModel):
+    """
+    Email lié à un dossier de recouvrement.
+    - source=acx: envoyé depuis ACX
+    - source=outlook: preuve attachée (fichier .eml) d'un email envoyé depuis Outlook
+    """
+    tenant = models.ForeignKey(TENANT_MODEL, on_delete=models.CASCADE, related_name="collection_emails")
+    case = models.ForeignKey(CollectionCase, on_delete=models.CASCADE, related_name="emails")
+    action = models.ForeignKey(
+        CollectionAction,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="email_evidences",
+        help_text="Action timeline associée (type=email).",
+    )
+
+    source = models.CharField(max_length=20, choices=CollectionEmailSource.choices, default=CollectionEmailSource.ACX)
+    direction = models.CharField(max_length=20, choices=CollectionEmailDirection.choices, default=CollectionEmailDirection.OUTBOUND)
+    status = models.CharField(max_length=20, choices=CollectionEmailStatus.choices, default=CollectionEmailStatus.DRAFT, db_index=True)
+
+    from_address = models.CharField(max_length=255, blank=True, default="")
+    to = models.JSONField(blank=True, null=True)   # list[str]
+    cc = models.JSONField(blank=True, null=True)   # list[str]
+    bcc = models.JSONField(blank=True, null=True)  # list[str]
+
+    subject = models.CharField(max_length=255, blank=True, default="")
+    body_text = models.TextField(blank=True, default="")
+    body_html = models.TextField(blank=True, default="")
+
+    # Notes utilisateur (ex: commentaires agent, contexte)
+    notes = models.TextField(blank=True, default="")
+
+    provider = models.CharField(max_length=64, blank=True, default="")
+    provider_message_id = models.CharField(max_length=255, blank=True, default="")
+
+    # RFC Message-ID header (preuve)
+    message_id = models.CharField(max_length=255, blank=True, default="")
+
+    sent_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    error_message = models.TextField(blank=True, default="")
+
+    raw_eml = models.FileField(upload_to=_collection_email_upload_to, null=True, blank=True)
+
+    meta = models.JSONField(default=dict, blank=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="created_collection_emails",
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["tenant", "case", "created_at"]),
+            models.Index(fields=["tenant", "status"]),
+            models.Index(fields=["tenant", "source"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.case.reference} - {self.subject or '(email)'}"
+
+
+class CollectionEmailAttachment(TimeStampedModel):
+    tenant = models.ForeignKey(TENANT_MODEL, on_delete=models.CASCADE, related_name="collection_email_attachments")
+    email = models.ForeignKey(CollectionEmail, on_delete=models.CASCADE, related_name="attachments")
+
+    filename = models.CharField(max_length=255, blank=True, default="")
+    content_type = models.CharField(max_length=127, blank=True, default="")
+    size = models.PositiveIntegerField(default=0)
+
+    file = models.FileField(upload_to=_collection_email_upload_to)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="created_collection_email_attachments",
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["tenant", "email", "created_at"]),
+        ]
 
 # -------------------------------------------------------------------
 # ✅ Tenant resolver ACX (ROBUSTE) - remplace l'import fragile accounts.models

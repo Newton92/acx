@@ -6,27 +6,27 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from accounts.api import me
 from accounts.views import MembershipViewSet
-from accounts.jwt_views import EmailOrUsernameTokenObtainPairView  # ✅ ajout
+from accounts.jwt_views import (
+    EmailOrUsernameTokenObtainPairView,
+    TenantTokenObtainPairView,
+    CustomerPortalTokenObtainPairView,
+)
 from django.conf import settings
 from django.conf.urls.static import static
 router = DefaultRouter()
 router.register(r"memberships", MembershipViewSet, basename="memberships")
 
-from cases.views_customer_portal_messages import (
-    CustomerPortalInboxView,
-    CustomerPortalCaseMessagesView,
-    CustomerPortalMessageReadView,
-    CustomerPortalCaseMessageDetailView,
-)
-
 urlpatterns = [
     path("admin/", admin.site.urls),
 
-    # Auth
-    path("api/auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("api/auth/token/email/", EmailOrUsernameTokenObtainPairView.as_view(), name="token_obtain_pair_email"),  # ✅ ajout
+    # Auth — agents/admins tenant (username ou email)
+    path("api/auth/token/", TenantTokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/auth/token/email/", EmailOrUsernameTokenObtainPairView.as_view(), name="token_obtain_pair_email"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/me/", me, name="auth_me"),
+
+    # Auth — portail client exclusif (bloque admins/agents sans CustomerMembership)
+    path("api/auth/client-portal/token/", CustomerPortalTokenObtainPairView.as_view(), name="client_portal_token"),
 
 
 
@@ -37,6 +37,7 @@ urlpatterns = [
     path("api/", include("cases.urls")),
     path("api/", include("customers.urls")),
     path("api/", include("collections_management.urls")),
+    path("api/", include("treasury_management.urls")),
 
     # Memberships API (router)
     path("api/", include(router.urls)),

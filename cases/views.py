@@ -9,7 +9,8 @@ from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.views import APIView
+from rest_framework.exceptions import PermissionDenied, ValidationError, NotFound
 
 from accounts.models import AuditLog
 from accounts.tenant_ctx import get_active_tenant, is_tenant_admin
@@ -37,6 +38,12 @@ class TenantScopedViewSet(viewsets.ModelViewSet):
     def tenant_filter(self, qs):
         tenant = self.get_tenant()
         return qs.filter(tenant=tenant) if tenant else qs.none()
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        # ✅ injecte le tenant en contexte serializer (utile pour validations multi-tenant)
+        ctx["tenant"] = self.get_tenant()
+        return ctx
 
 
 class PortfolioViewSet(TenantScopedViewSet):
@@ -349,6 +356,45 @@ class CaseViewSet(TenantScopedViewSet):
         )
 
 
+class TenantCaseNoteDetailView(APIView):
+    """
+    PATCH  /cases/{case_id}/notes/{note_id}/  -- modifier une note
+    DELETE /cases/{case_id}/notes/{note_id}/  -- supprimer une note
+    Seul l'auteur peut modifier/supprimer sa propre note.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _get_note(self, request, case_id: int, note_id: int) -> CaseNote:
+        from accounts.tenant_context import get_active_tenant_for_user
+        tenant = get_active_tenant_for_user(request.user)
+        if not tenant:
+            raise PermissionDenied("No active tenant.")
+        case = Case.objects.filter(id=case_id, tenant=tenant).first()
+        if not case:
+            raise NotFound("Case not found.")
+        note = CaseNote.objects.filter(id=note_id, case=case).first()
+        if not note:
+            raise NotFound("Note not found.")
+        return note
+
+    def patch(self, request, case_id: int, note_id: int):
+        note = self._get_note(request, case_id, note_id)
+        if note.author_id and note.author_id != request.user.id:
+            raise PermissionDenied("You can only edit your own notes.")
+        body = (request.data.get("body") or "").strip()
+        if not body:
+            return Response({"detail": "body is required."}, status=400)
+        note.body = body
+        note.save(update_fields=["body", "updated_at"])
+        from cases.serializers import CaseNoteSerializer
+        return Response(CaseNoteSerializer(note).data)
+
+    def delete(self, request, case_id: int, note_id: int):
+        note = self._get_note(request, case_id, note_id)
+        if note.author_id and note.author_id != request.user.id:
+            raise PermissionDenied("You can only delete your own notes.")
+        note.delete()
+        return Response(status=204)
 
 
 

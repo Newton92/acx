@@ -53,7 +53,9 @@ INSTALLED_APPS = [
     "tenancy",
     "cases",
     "customers",
-    "collections_management"
+    "collections_management",
+    "treasury_management",
+
 ]
 
 MIDDLEWARE = [
@@ -106,7 +108,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',  # Ou 'django.db.backends.postgresql_psycopg2'
         'NAME': 'acx_db',
         'USER': 'postgres',
-        'PASSWORD': 'pel',
+        'PASSWORD': '1651221@$Ng',
         'HOST': '127.0.0.1',
         'PORT': '5432',
     }
@@ -154,9 +156,9 @@ STATIC_URL = 'static/'
 AUTH_USER_MODEL = "accounts.User"
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=5),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=200),
-    "ROTATE_REFRESH_TOKENS": True,
+    "ACCESS_TOKEN_LIFETIME":  timedelta(minutes=30),   # 30 min — refresh silencieux si actif
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),       # 30 jours
+    "ROTATE_REFRESH_TOKENS":  True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
 }

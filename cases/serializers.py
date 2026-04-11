@@ -5,6 +5,7 @@ from rest_framework.exceptions import ValidationError
 
 from accounts.tenant_context import get_active_tenant_for_user
 from cases.models import Portfolio, Debtor, Case, CaseNote, CaseDocument
+from customers.models import Customer
 
 User = get_user_model()
 
@@ -31,6 +32,45 @@ def get_request_tenant(serializer: serializers.Serializer):
     user = getattr(request, "user", None)
     if user and user.is_authenticated:
         return get_active_tenant_for_user(user)
+
+
+def get_request_customer(serializer: serializers.Serializer):
+    """
+    Récupère le customer de façon robuste :
+    1) serializer.context["customer"] (portail client)
+    2) request.customer (si middleware un jour)
+    3) request.user.customer (si ton modèle l'a)
+    """
+    customer = serializer.context.get("customer")
+    if customer is not None:
+        return customer
+
+    request = serializer.context.get("request")
+    if request is None:
+        return None
+
+    c = getattr(request, "customer", None)
+    if c is not None:
+        return c
+
+    user = getattr(request, "user", None)
+    if user and getattr(user, "is_authenticated", False):
+        return getattr(user, "customer", None)
+
+    return None
+
+
+def _qs_for_tenant(model_cls, tenant):
+    """Retourne un queryset filtré par tenant si le modèle a un champ tenant."""
+    if tenant is None:
+        return model_cls.objects.none()
+    try:
+        model_cls._meta.get_field("tenant")
+        return model_cls.objects.filter(tenant=tenant)
+    except Exception:
+        # si pas de champ tenant, on ne peut pas scope ici
+        return model_cls.objects.all()
+
 
     return None
 
@@ -126,9 +166,20 @@ class CaseSerializer(serializers.ModelSerializer):
     debtor = DebtorSerializer(read_only=True)
     portfolio = PortfolioSerializer(read_only=True)
 
+    # Customer: on expose au minimum l'id en lecture.
+    customer = serializers.IntegerField(source="customer_id", read_only=True)
+
     assigned_to_username = serializers.CharField(source="assigned_to.username", read_only=True)
 
     # ---- WRITE (ids) ----
+    customer_id = serializers.PrimaryKeyRelatedField(
+        source="customer",
+        queryset=Customer.objects.all(),
+        write_only=True,
+        required=False,
+        allow_null=False,
+    )
+
     debtor_id = serializers.PrimaryKeyRelatedField(
         source="debtor",
         queryset=Debtor.objects.all(),
@@ -151,6 +202,31 @@ class CaseSerializer(serializers.ModelSerializer):
         write_only=True,
     )
 
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Scope des querysets au tenant (quand possible) pour éviter qu'un tenant
+        # référence des objets d'un autre tenant.
+        tenant = get_request_tenant(self)
+        if tenant is None:
+            return
+
+        try:
+            self.fields["debtor_id"].queryset = _qs_for_tenant(Debtor, tenant)
+        except Exception:
+            pass
+
+        try:
+            self.fields["portfolio_id"].queryset = _qs_for_tenant(Portfolio, tenant)
+        except Exception:
+            pass
+
+        try:
+            self.fields["customer_id"].queryset = _qs_for_tenant(Customer, tenant)
+        except Exception:
+            pass
+
     class Meta:
         model = Case
         fields = [
@@ -167,6 +243,8 @@ class CaseSerializer(serializers.ModelSerializer):
             "closed_at",
             "portfolio",
             "portfolio_id",
+            "customer",
+            "customer_id",
             "debtor",
             "debtor_id",
             "assigned_to_id",
@@ -182,6 +260,7 @@ class CaseSerializer(serializers.ModelSerializer):
         if tenant is None:
             raise ValidationError("Tenant non détecté sur la requête/contexte.")
 
+        # --- Multi-tenant safety ---
         debtor = attrs.get("debtor")
         if debtor and getattr(debtor, "tenant_id", None) != tenant.id:
             raise ValidationError({"debtor_id": "Ce débiteur n'appartient pas à votre tenant."})
@@ -189,6 +268,30 @@ class CaseSerializer(serializers.ModelSerializer):
         portfolio = attrs.get("portfolio")
         if portfolio is not None and getattr(portfolio, "tenant_id", None) != tenant.id:
             raise ValidationError({"portfolio_id": "Ce portefeuille n'appartient pas à votre tenant."})
+
+        # --- Customer (donneur d'ordre) ---
+        # Métier: un dossier est TOUJOURS rattaché à un customer (FK NOT NULL).
+        # - Création: le tenant doit fournir customer_id (ou il doit être injecté via contexte côté portail client).
+        # - Mise à jour: on interdit de changer le customer via API; on conserve celui existant.
+        if self.instance is not None:
+            if "customer" in attrs:
+                raise ValidationError({"customer_id": "Le client (customer) d'un dossier ne peut pas être modifié."})
+            customer = getattr(self.instance, "customer", None)
+        else:
+            customer = attrs.get("customer") or get_request_customer(self)
+            if customer is None:
+                raise ValidationError({"customer_id": "Le client (customer) est obligatoire pour créer un dossier."})
+
+        if customer is None:
+            raise ValidationError({"customer_id": "Customer introuvable."})
+
+        # Si le modèle Customer est tenant-scopé, on vérifie l'appartenance.
+        cust_tenant_id = getattr(customer, "tenant_id", None)
+        if cust_tenant_id is not None and cust_tenant_id != tenant.id:
+            raise ValidationError({"customer_id": "Ce client (customer) n'appartient pas à votre tenant."})
+
+        # Assure qu'il soit bien dans attrs pour l'insert
+        attrs["customer"] = customer
 
         return attrs
 
@@ -217,8 +320,8 @@ class CaseNoteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CaseNote
-        fields = ["id", "case", "author", "author_username", "body", "created_at"]
-        read_only_fields = ["id", "case", "created_at", "author", "author_username"]
+        fields = ["id", "case", "author", "author_username", "body", "created_at", "updated_at"]
+        read_only_fields = ["id", "case", "created_at", "updated_at", "author", "author_username"]
 
     def create(self, validated_data):
         request = self.context.get("request")

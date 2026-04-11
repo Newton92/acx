@@ -46,6 +46,83 @@ class UserViewSet(viewsets.ModelViewSet):
             return UserCreateSerializer
         return UserSerializer
 
+    @action(detail=True, methods=["post"], url_path="reset-password")
+    def reset_password(self, request, pk=None):
+        """
+        POST /api/users/{id}/reset-password/
+        Body: { "password": "Good123" }
+        Mot de passe souple (min 6 cars, pas de validateur Django).
+        Positionne must_change_password=True.
+        """
+        user = self.get_object()
+        password = (request.data.get("password") or "").strip()
+
+        if len(password) < 6:
+            return Response(
+                {"detail": "Le mot de passe doit contenir au moins 6 caractères."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.set_password(password)
+        user.is_active = True          # réactive le compte si suspendu
+        user.save(update_fields=["password", "is_active"])
+
+        # Applique must_change_password si la migration est en place
+        try:
+            user.must_change_password = True
+            user.save(update_fields=["must_change_password"])
+        except Exception:
+            pass  # migration pas encore appliquée — ignoré
+
+        AuditLog.objects.create(
+            action="USER_PASSWORD_RESET",
+            actor=request.user,
+            entity_type="User",
+            entity_id=user.id,
+            entity_label=str(user),
+        )
+
+        return Response({"detail": "Mot de passe réinitialisé. L'utilisateur devra le changer à la prochaine connexion."})
+
+    @action(detail=False, methods=["post"], url_path="change-password",
+            permission_classes=[IsAuthenticated])
+    def change_password(self, request):
+        """
+        POST /api/users/change-password/
+        Body: { "new_password": "...", "confirm_password": "..." }
+        Accessible par n'importe quel utilisateur authentifié.
+        Efface must_change_password après succès.
+        """
+        user = request.user
+        new_pwd     = (request.data.get("new_password")     or "").strip()
+        confirm_pwd = (request.data.get("confirm_password") or "").strip()
+
+        if len(new_pwd) < 8:
+            return Response(
+                {"detail": "Le nouveau mot de passe doit contenir au moins 8 caractères."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if new_pwd != confirm_pwd:
+            return Response(
+                {"detail": "Les mots de passe ne correspondent pas."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.set_password(new_pwd)
+        user.must_change_password = False
+        user.save(update_fields=["password", "must_change_password"])
+
+        AuditLog.objects.create(
+            action="USER_PASSWORD_CHANGED",
+            actor=user,
+            entity_type="User",
+            entity_id=user.id,
+            entity_label=str(user),
+        )
+
+        return Response({"detail": "Mot de passe mis à jour avec succès."})
+
 
 class RoleViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Role.objects.all().order_by("id")

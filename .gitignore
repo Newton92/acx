@@ -42,7 +42,7 @@ static_root/
 ###################################
 # COLLECTSTATIC
 ###################################
-/static/
+/collections_management/static/
 
 ###################################
 # CELERY / REDIS

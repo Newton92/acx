@@ -222,9 +222,10 @@ class CaseNote(models.Model):
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     body = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-id"]
+        ordering = ["id"]
 
     def __str__(self):
         return f"Note #{self.id} on {self.case}"
@@ -319,3 +320,39 @@ class CaseMessageRead(models.Model):
             models.Index(fields=["user", "-read_at"]),
             models.Index(fields=["message", "user"]),
         ]
+
+
+class CaseCall(models.Model):
+    """
+    Session d'appel audio/vidéo sur un dossier.
+    Signaling WebRTC natif : offer/answer SDP + ICE candidates échangés via polling.
+    """
+    CALL_TYPE = [("audio", "Audio"), ("video", "Vidéo")]
+    STATUS    = [("active", "Actif"), ("ended", "Terminé")]
+
+    case             = models.ForeignKey("cases.Case", on_delete=models.CASCADE, related_name="calls")
+    initiator        = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="initiated_calls"
+    )
+    initiator_side   = models.CharField(
+        max_length=12, choices=[("tenant", "Tenant"), ("customer", "Customer")], default="tenant"
+    )
+    room_name        = models.CharField(max_length=80, unique=True)
+    call_type        = models.CharField(max_length=10, choices=CALL_TYPE, default="video")
+    status           = models.CharField(max_length=10, choices=STATUS, default="active", db_index=True)
+    created_at       = models.DateTimeField(auto_now_add=True)
+    ended_at         = models.DateTimeField(null=True, blank=True)
+
+    # WebRTC signaling fields
+    offer_sdp        = models.TextField(blank=True, default="")
+    answer_sdp       = models.TextField(blank=True, default="")
+    ice_initiator    = models.JSONField(default=list, blank=True)  # ICE candidates from call initiator
+    ice_peer         = models.JSONField(default=list, blank=True)  # ICE candidates from the other side
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["case", "status"])]
+
+    def __str__(self):
+        return f"Call#{self.id} case={self.case_id} {self.call_type} {self.status}"

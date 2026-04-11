@@ -264,7 +264,8 @@ class CustomerPortalUsersView(APIView):
                 is_active=True,
             )
             u.set_password(temp_password)
-            u.save(update_fields=["password"])
+            u.must_change_password = True
+            u.save(update_fields=["password", "must_change_password"])
 
             # membership client portal -> CustomerMembership existe déjà chez toi
             # on reste cohérent avec ton CustomerViewSet/memberships()

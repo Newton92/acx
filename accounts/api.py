@@ -74,6 +74,7 @@ def me(request):
         "is_superuser": u.is_superuser,
         "is_staff": u.is_staff,
         "is_active": u.is_active,
+        "must_change_password": u.must_change_password,
 
         "active_tenant": active_tenant,
         "active_membership": active_membership,

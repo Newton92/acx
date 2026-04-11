@@ -1,5 +1,8 @@
 # cases/views_customer_portal_messages.py
+import time
+
 from django.conf import settings
+from django.core.cache import cache
 from django.core.mail import send_mail
 from django.db.models import Exists, OuterRef, Q
 from rest_framework.views import APIView
@@ -96,11 +99,17 @@ ALLOWED_EXT = {
     ".xls", ".xlsx",
     ".ppt", ".pptx",
     ".txt", ".csv",
+    # Audio
+    ".mp3", ".wav", ".ogg", ".m4a", ".webm", ".opus",
+    # Video
+    ".mp4", ".mov", ".webm",
 }
 
 # MIME whitelist (best effort)
 ALLOWED_MIME_PREFIX = (
     "image/",
+    "audio/",
+    "video/",
 )
 
 ALLOWED_MIME_EXACT = {
@@ -114,6 +123,36 @@ ALLOWED_MIME_EXACT = {
     "application/vnd.ms-powerpoint",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
+
+
+# ---------------- Typing indicator (cache-based polling) ----------------
+
+def _typing_cache_key(case_id: int) -> str:
+    return f"acx:typing:{case_id}"
+
+
+def _set_typing(case_id: int, user_id: int, label: str):
+    key = _typing_cache_key(case_id)
+    data: dict = cache.get(key) or {}
+    data[str(user_id)] = {"label": label, "expires_at": time.time() + 6}
+    cache.set(key, data, timeout=10)
+
+
+def _clear_typing(case_id: int, user_id: int):
+    key = _typing_cache_key(case_id)
+    data: dict = cache.get(key) or {}
+    data.pop(str(user_id), None)
+    cache.set(key, data, timeout=10)
+
+
+def _get_typing_labels(case_id: int, exclude_user_id: int) -> list[str]:
+    data: dict = cache.get(_typing_cache_key(case_id)) or {}
+    now = time.time()
+    return [
+        v["label"]
+        for k, v in data.items()
+        if str(k) != str(exclude_user_id) and v.get("expires_at", 0) > now
+    ]
 
 # hard forbidden (even if extension says ok)
 FORBIDDEN_MIME_EXACT = {
@@ -412,3 +451,40 @@ class CustomerPortalCaseMessageDetailView(APIView):
             raise PermissionDenied("Not allowed.")
         m.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CustomerPortalTypingView(APIView):
+    """
+    GET  /customer-portal/cases/{case_id}/typing/  → qui est en train d'écrire
+    POST /customer-portal/cases/{case_id}/typing/  → je suis en train d'écrire
+    DELETE /customer-portal/cases/{case_id}/typing/ → j'ai arrêté d'écrire
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _verify_access(self, request, case_id: int):
+        membership, customer, tenant = _cp_context(request)
+        c = Case.objects.filter(id=case_id, tenant=tenant, customer=customer).first()
+        if not c:
+            raise NotFound("Case not found.")
+        return membership, customer, c
+
+    def get(self, request, case_id: int):
+        self._verify_access(request, case_id)
+        labels = _get_typing_labels(case_id, request.user.id)
+        return Response({"typing": labels}, status=status.HTTP_200_OK)
+
+    def post(self, request, case_id: int):
+        self._verify_access(request, case_id)
+        u = request.user
+        label = (
+            f"{u.first_name} {u.last_name}".strip()
+            or getattr(u, "username", None)
+            or "Quelqu'un"
+        )
+        _set_typing(case_id, u.id, label)
+        return Response({"ok": True}, status=status.HTTP_200_OK)
+
+    def delete(self, request, case_id: int):
+        self._verify_access(request, case_id)
+        _clear_typing(case_id, request.user.id)
+        return Response({"ok": True}, status=status.HTTP_200_OK)

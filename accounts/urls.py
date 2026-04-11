@@ -33,6 +33,24 @@ from cases.views_customer_portal_messages import (
     CustomerPortalCaseMessagesView,
     CustomerPortalMessageReadView,
     CustomerPortalCaseMessageDetailView,
+    CustomerPortalTypingView,
+)
+
+from cases.views_tenant_messages import (
+    TenantMessagingInboxView,
+    TenantCaseMessagesView,
+    TenantCaseMessageDetailView,
+    TenantCaseMessageReadView,
+    TenantTypingView,
+)
+
+from cases.views_calls import (
+    TenantCaseCallsView,
+    TenantCaseCallEndView,
+    CustomerPortalCaseCallsView,
+    CustomerPortalCaseCallEndView,
+    TenantCaseCallSignalView,
+    CustomerPortalCaseCallSignalView,
 )
 
 
@@ -73,11 +91,31 @@ urlpatterns = [
     path("customer-portal/messages/", CustomerPortalInboxView.as_view(), name="customer-portal-inbox"),
     path("customer-portal/messages/<int:msg_id>/read/", CustomerPortalMessageReadView.as_view(),
          name="customer-portal-message-read"),
-
     path("customer-portal/cases/<int:case_id>/messages/", CustomerPortalCaseMessagesView.as_view(),
          name="customer-portal-case-messages"),
     path("customer-portal/cases/<int:case_id>/messages/<int:msg_id>/", CustomerPortalCaseMessageDetailView.as_view(),
          name="customer-portal-case-message-detail"),
+    path("customer-portal/cases/<int:case_id>/typing/", CustomerPortalTypingView.as_view(),
+         name="customer-portal-case-typing"),
+
+    # Tenant messaging
+    path("cases/messages/inbox/", TenantMessagingInboxView.as_view(), name="tenant-messages-inbox"),
+    path("cases/<int:case_id>/messages/", TenantCaseMessagesView.as_view(), name="tenant-case-messages"),
+    path("cases/<int:case_id>/messages/<int:msg_id>/", TenantCaseMessageDetailView.as_view(), name="tenant-case-message-detail"),
+    path("cases/<int:case_id>/messages/<int:msg_id>/read/", TenantCaseMessageReadView.as_view(), name="tenant-case-message-read"),
+    path("cases/<int:case_id>/typing/", TenantTypingView.as_view(), name="tenant-case-typing"),
+
+    # Appels audio/vidéo — tenant
+    path("cases/<int:case_id>/calls/", TenantCaseCallsView.as_view(), name="tenant-case-calls"),
+    path("cases/<int:case_id>/calls/active/", TenantCaseCallsView.as_view(), name="tenant-case-calls-active"),
+    path("cases/<int:case_id>/calls/<int:call_id>/", TenantCaseCallEndView.as_view(), name="tenant-case-call-end"),
+    path("cases/<int:case_id>/calls/<int:call_id>/signal/", TenantCaseCallSignalView.as_view(), name="tenant-case-call-signal"),
+
+    # Appels audio/vidéo — portail client
+    path("customer-portal/cases/<int:case_id>/calls/", CustomerPortalCaseCallsView.as_view(), name="cp-case-calls"),
+    path("customer-portal/cases/<int:case_id>/calls/active/", CustomerPortalCaseCallsView.as_view(), name="cp-case-calls-active"),
+    path("customer-portal/cases/<int:case_id>/calls/<int:call_id>/", CustomerPortalCaseCallEndView.as_view(), name="cp-case-call-end"),
+    path("customer-portal/cases/<int:case_id>/calls/<int:call_id>/signal/", CustomerPortalCaseCallSignalView.as_view(), name="cp-case-call-signal"),
 
     path("customer-portal/debtors/", CustomerPortalDebtorsView.as_view(), name="customer-portal-debtors"),
     path("customer-portal/debtors/<int:debtor_id>/", CustomerPortalDebtorDetailView.as_view(),

@@ -163,7 +163,8 @@ class CustomerViewSet(ModelViewSet):
 
         with transaction.atomic():
             u.set_password(temp_password)
-            u.save(update_fields=["password"])
+            u.must_change_password = True
+            u.save(update_fields=["password", "must_change_password"])
 
         # URL portail client (tu peux la mettre en settings/env)
         # Ex: FRONTEND_CLIENT_PORTAL_LOGIN_URL="https://acx.app/fr/client/login"
@@ -201,6 +202,97 @@ class CustomerViewSet(ModelViewSet):
             },
             status=status.HTTP_200_OK,
         )
+
+
+    # ✅ /api/customers/{id}/portal/primary-user/
+    @action(detail=True, methods=["POST"], url_path="portal/primary-user")
+    def portal_primary_user(self, request, pk=None):
+        """
+        Active le portail pour ce client et crée (ou retrouve) l'utilisateur principal.
+        Retourne le mot de passe temporaire si l'utilisateur vient d'être créé.
+        """
+        customer: Customer = self.get_object()
+
+        data = request.data
+        email = (data.get("email") or "").strip().lower()
+        if not email:
+            raise ValidationError({"email": "Email obligatoire."})
+
+        first_name = (data.get("first_name") or "").strip()
+        last_name  = (data.get("last_name")  or "").strip()
+        telephone  = (data.get("telephone")  or "").strip()
+        departement= (data.get("departement")or "").strip()
+        username   = (data.get("username")   or "").strip()
+
+        temp_password = None
+
+        with transaction.atomic():
+            # 1. Retrouver ou créer l'utilisateur
+            user = User.objects.filter(email__iexact=email).first()
+            created_user = False
+            if user is None:
+                temp_password = _generate_temp_password(12)
+                user = User(
+                    email=email,
+                    username=username or email,
+                    first_name=first_name,
+                    last_name=last_name,
+                    is_active=True,
+                )
+                if hasattr(user, "telephone"):
+                    user.telephone = telephone
+                if hasattr(user, "departement"):
+                    user.departement = departement
+                user.set_password(temp_password)
+                user.must_change_password = True
+                user.save()
+                created_user = True
+            else:
+                # Mise à jour légère si champs fournis
+                updated = False
+                for attr, val in [("first_name", first_name), ("last_name", last_name)]:
+                    if val:
+                        setattr(user, attr, val)
+                        updated = True
+                if hasattr(user, "telephone") and telephone:
+                    user.telephone = telephone
+                    updated = True
+                if hasattr(user, "departement") and departement:
+                    user.departement = departement
+                    updated = True
+                if updated:
+                    user.save()
+
+            # 2. Créer ou mettre à jour le membership principal
+            membership, _ = CustomerMembership.objects.get_or_create(
+                customer=customer,
+                user=user,
+                defaults={
+                    "role": CustomerMembership.Role.OWNER,
+                    "status": CustomerMembership.Status.ACTIVE,
+                    "is_primary_contact": True,
+                },
+            )
+            if not _:
+                # Membership existe déjà : on s'assure qu'il est owner + contact principal
+                membership.role = CustomerMembership.Role.OWNER
+                membership.status = CustomerMembership.Status.ACTIVE
+                membership.is_primary_contact = True
+                membership.save()
+
+            # 3. Activer le portail du client
+            customer.portal_enabled = True
+            customer.save(update_fields=["portal_enabled"])
+
+        resp = {
+            "portal_enabled": True,
+            "user_created": created_user,
+            "user_email": email,
+        }
+        if temp_password:
+            resp["temporary_password"] = temp_password
+
+        return Response(resp, status=status.HTTP_200_OK)
 
 
 class CustomerPortalMeView(APIView):

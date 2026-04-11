@@ -27,8 +27,9 @@ class Role(models.Model):
 class User(AbstractUser):
     telephone = models.CharField(max_length=30, null=True, blank=True)
     departement = models.CharField(max_length=120, null=True, blank=True)
-    # Optionnel mais recommandé si tu veux login par email plus tard
     email = models.EmailField(unique=True)
+    # Si True : l'utilisateur doit changer son mot de passe à la prochaine connexion
+    must_change_password = models.BooleanField(default=False)
 
     def __str__(self):
         full = (self.first_name + " " + self.last_name).strip()
