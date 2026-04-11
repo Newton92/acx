@@ -1,6 +1,4 @@
 #accounts/urls.py
-from tkinter.font import names
-
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
