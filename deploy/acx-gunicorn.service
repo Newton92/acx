@@ -7,10 +7,10 @@ Requires=postgresql.service
 Type=notify
 User=www-data
 Group=www-data
-WorkingDirectory=/var/www/acx
+WorkingDirectory=/var/www/html/acx
 
 # Charge le fichier .env (variables d'environnement de production)
-EnvironmentFile=/var/www/acx/.env
+EnvironmentFile=/var/www/html/acx/.env
 
 # Indique à Django d'utiliser les settings de production
 Environment="DJANGO_SETTINGS_MODULE=acx.settings_prod"
@@ -22,8 +22,8 @@ Environment="MPLBACKEND=Agg"
 RuntimeDirectory=gunicorn
 RuntimeDirectoryMode=0755
 
-ExecStart=/var/www/acx/venv/bin/gunicorn \
-    --config /var/www/acx/deploy/gunicorn.conf.py \
+ExecStart=/var/www/html/acx/venv/bin/gunicorn \
+    --config /var/www/html/acx/deploy/gunicorn.conf.py \
     acx.wsgi:application
 
 ExecReload=/bin/kill -s HUP $MAINPID

@@ -6,7 +6,7 @@
 #   sudo bash deploy/update.sh
 
 set -e
-APP_DIR="/var/www/acx"
+APP_DIR="/var/www/html/acx"
 
 echo "=== [1/5] Pull git ==="
 cd $APP_DIR
