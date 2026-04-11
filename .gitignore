@@ -17,9 +17,14 @@ db.sqlite3
 db.sqlite3-journal
 *.sqlite3
 
-# Migrations temporaires (à ignorer si besoin)
-# **/migrations/*.py
-# !**/migrations/__init__.py
+###################################
+# MIGRATIONS — la PROD génère les siennes
+# Sur le serveur : python manage.py makemigrations && migrate
+###################################
+**/migrations/*.py
+!**/migrations/__init__.py
+**/migrations/*.pyc
+**/migrations/__pycache__/
 
 ###################################
 # ENVIRONNEMENT & SECRETS
@@ -31,9 +36,11 @@ db.sqlite3-journal
 .env.dev
 .env.prod
 .env.test
+# Garder seulement le template
+!.env.example
 
 ###################################
-# MEDIA & STATIC
+# STATIC & MEDIA (générés sur le serveur)
 ###################################
 media/
 staticfiles/
@@ -43,18 +50,6 @@ static_root/
 # COLLECTSTATIC
 ###################################
 /collections_management/static/
-
-###################################
-# CELERY / REDIS
-###################################
-celerybeat-schedule
-celerybeat.pid
-
-###################################
-# CACHE / SESSIONS
-###################################
-.cache/
-.sessions/
 
 ###################################
 # LOGS
@@ -73,7 +68,7 @@ htmlcov/
 .tox/
 
 ###################################
-# EXPORTS / IMPORTS
+# EXPORTS / RAPPORTS (générés à la volée)
 ###################################
 *.csv
 *.xls
@@ -82,6 +77,14 @@ htmlcov/
 *.pdf
 *.zip
 *.rar
+
+###################################
+# CACHE / SESSIONS
+###################################
+.cache/
+.sessions/
+celerybeat-schedule
+celerybeat.pid
 
 ###################################
 # DOCKER
@@ -127,13 +130,8 @@ dist/
 build/
 
 ###################################
-# TEMP FILES
+# TEMP
 ###################################
 *.tmp
 *.swp
 *.bak
-###################################
-# DJANGO MIGRATIONS
-###################################
-**/migrations/*.pyc
-**/migrations/__pycache__/

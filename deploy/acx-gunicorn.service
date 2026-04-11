@@ -1,0 +1,37 @@
+[Unit]
+Description=ACX – Gunicorn WSGI (Django)
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=notify
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/acx
+
+# Charge le fichier .env (variables d'environnement de production)
+EnvironmentFile=/var/www/acx/.env
+
+# Indique à Django d'utiliser les settings de production
+Environment="DJANGO_SETTINGS_MODULE=acx.settings_prod"
+
+# Fixe le backend matplotlib pour éviter l'erreur tkinter
+Environment="MPLBACKEND=Agg"
+
+# Crée le dossier du socket s'il n'existe pas
+RuntimeDirectory=gunicorn
+RuntimeDirectoryMode=0755
+
+ExecStart=/var/www/acx/venv/bin/gunicorn \
+    --config /var/www/acx/deploy/gunicorn.conf.py \
+    acx.wsgi:application
+
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
