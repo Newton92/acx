@@ -108,7 +108,7 @@ def admin_dashboard_stats(request):
                 .distinct()
                 .count()
             ),
-            "cases": Case.objects.filter(created_at__date__lte=d).count(),
+            "cases": Case.objects.filter(opened_at__date__lte=d).count(),
         })
 
     # ── Répartition par plan ──────────────────────────────────────────────────
