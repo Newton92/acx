@@ -187,6 +187,8 @@ class SuperAdminOnly(IsAuthenticated):
 class MembershipViewSet(viewsets.ModelViewSet):
     queryset = Membership.objects.select_related("tenant", "user").prefetch_related("roles").all()
     serializer_class = MembershipSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ["tenant", "user", "status"]
 
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
