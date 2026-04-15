@@ -38,7 +38,7 @@ class UserViewSet(viewsets.ModelViewSet):
     """
     Gestion des utilisateurs plateforme (super admin only).
     """
-    queryset = User.objects.all().order_by("-id")
+    queryset = User.objects.prefetch_related("memberships__tenant").all().order_by("-id")
     permission_classes = [IsPlatformSuperAdmin]
 
     def get_serializer_class(self):

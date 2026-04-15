@@ -28,5 +28,5 @@ python manage.py collectstatic --no-input
 echo "=== [5/5] Redémarrage Gunicorn ==="
 systemctl restart acx-gunicorn
 
-echo "✅ Mise à jour terminée !"
+echo "✅ Pel, ta mise à jour terminée hein!"
 systemctl status acx-gunicorn --no-pager

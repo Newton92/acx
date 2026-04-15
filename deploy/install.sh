@@ -87,10 +87,7 @@ a2ensite acx
 systemctl reload apache2
 
 echo ""
-echo "✅ Installation terminée !"
+echo "✅ PEL, to installation terminée hein !"
 echo ""
 echo "Prochaines étapes :"
 echo "  1. Vérifier : sudo systemctl status acx-gunicorn"
-echo "  2. Editer    : /etc/apache2/sites-available/acx.conf  (mettre votre domaine)"
-echo "  3. SSL       : sudo apt install certbot python3-certbot-apache"
-echo "                 sudo certbot --apache -d votre-domaine.com"

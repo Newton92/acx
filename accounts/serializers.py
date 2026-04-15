@@ -23,21 +23,33 @@ class UserLiteSerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
+    tenants = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
             "id", "username", "email", "first_name", "last_name",
             "telephone", "departement", "is_active", "is_staff", "is_superuser",
-            "must_change_password",
+            "must_change_password", "tenants",
         ]
-        read_only_fields = ["id", "is_staff", "is_superuser"]
+        read_only_fields = ["id"]
+
+    def get_tenants(self, obj):
+        return [
+            {"id": m.tenant.id, "name": m.tenant.name, "status": m.status}
+            for m in obj.memberships.select_related("tenant").all()
+        ]
 
 class UserCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "first_name", "last_name", "telephone", "departement", "password"]
+        fields = [
+            "id", "username", "email", "first_name", "last_name",
+            "telephone", "departement", "password",
+            "is_active", "is_staff", "is_superuser",
+        ]
 
     def create(self, validated_data):
         password = validated_data.pop("password")
