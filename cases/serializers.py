@@ -166,10 +166,12 @@ class CaseSerializer(serializers.ModelSerializer):
     debtor = DebtorSerializer(read_only=True)
     portfolio = PortfolioSerializer(read_only=True)
 
-    # Customer: on expose au minimum l'id en lecture.
+    # Customer: id + nom en lecture.
     customer = serializers.IntegerField(source="customer_id", read_only=True)
+    customer_name = serializers.CharField(source="customer.name", read_only=True, default="")
 
     assigned_to_username = serializers.CharField(source="assigned_to.username", read_only=True)
+    # assigned_to_id lisible ET writable (retire write_only pour que le GET renvoie l'id)
 
     # ---- WRITE (ids) ----
     customer_id = serializers.PrimaryKeyRelatedField(
@@ -199,7 +201,7 @@ class CaseSerializer(serializers.ModelSerializer):
         queryset=User.objects.all(),
         required=False,
         allow_null=True,
-        write_only=True,
+        # write_only supprimé : le GET renvoie maintenant l'id de l'assigné
     )
 
 
@@ -245,6 +247,7 @@ class CaseSerializer(serializers.ModelSerializer):
             "portfolio_id",
             "customer",
             "customer_id",
+            "customer_name",
             "debtor",
             "debtor_id",
             "assigned_to_id",
