@@ -3,6 +3,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.db import transaction
+from django.db.models import ProtectedError
 from rest_framework.views import APIView
 
 from rest_framework.viewsets import ModelViewSet
@@ -45,6 +46,42 @@ class CustomerViewSet(ModelViewSet):
         if not tenant:
             raise PermissionDenied("No active tenant.")
         serializer.save(tenant=tenant, created_by=self.request.user)
+
+    def destroy(self, request, *args, **kwargs):
+        customer = self.get_object()
+        try:
+            customer.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except ProtectedError:
+            cases_count = (
+                customer.cases.count() if hasattr(customer, "cases") else 0
+            )
+            return Response(
+                {
+                    "detail": "Ce client possède des dossiers liés et ne peut pas être supprimé directement.",
+                    "cases_count": cases_count,
+                    "code": "protected",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+    @action(detail=True, methods=["DELETE"], url_path="force-delete")
+    def force_delete(self, request, pk=None):
+        """Suppression forcée : supprime tous les dossiers liés puis le client."""
+        customer = self.get_object()
+        with transaction.atomic():
+            # Supprimer les dossiers liés (cascades sur collections, payments, etc.)
+            cases_deleted = 0
+            if hasattr(customer, "cases"):
+                cases_deleted = customer.cases.count()
+                customer.cases.all().delete()
+            if hasattr(customer, "cases_cus"):
+                customer.cases_cus.all().delete()
+            customer.delete()
+        return Response(
+            {"detail": "Client et tous ses dossiers supprimés.", "cases_deleted": cases_deleted},
+            status=status.HTTP_200_OK,
+        )
 
     # ✅ /api/customers/{id}/memberships/
     @action(detail=True, methods=["GET", "POST"], url_path="memberships")
