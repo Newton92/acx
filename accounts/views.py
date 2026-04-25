@@ -410,15 +410,33 @@ class PlatformThreadView(APIView):
     def post(self, request, tenant_id):
         tenant, side = self._get_tenant_and_side(request, tenant_id)
         content = (request.data.get("content") or "").strip()
-        if not content:
+        file    = request.FILES.get("file")
+        if not content and not file:
             return Response({"detail": "Le message ne peut pas être vide."}, status=400)
         msg = AdminTenantMessage.objects.create(
             tenant=tenant,
             sender=request.user,
             sender_side=side,
             content=content,
+            file=file or None,
         )
-        return Response(AdminTenantMessageSerializer(msg).data, status=201)
+        return Response(
+            AdminTenantMessageSerializer(msg, context={"request": request}).data,
+            status=201,
+        )
+
+
+class PlatformMessageDeleteView(APIView):
+    """DELETE /api/platform-messages/message/{msg_id}/ — supprime son propre message"""
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, msg_id):
+        from rest_framework.exceptions import PermissionDenied
+        msg = get_object_or_404(AdminTenantMessage, pk=msg_id)
+        if msg.sender != request.user:
+            raise PermissionDenied()
+        msg.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class PlatformUnreadView(APIView):

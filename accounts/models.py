@@ -99,7 +99,8 @@ class AdminTenantMessage(models.Model):
         null=True, blank=True, related_name="sent_platform_messages",
     )
     sender_side = models.CharField(max_length=10, choices=SenderSide.choices)
-    content     = models.TextField()
+    content     = models.TextField(blank=True)
+    file        = models.FileField(upload_to="platform_messages/", null=True, blank=True)
     is_read     = models.BooleanField(default=False)
     created_at  = models.DateTimeField(auto_now_add=True)
 

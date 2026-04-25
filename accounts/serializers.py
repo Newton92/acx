@@ -157,23 +157,36 @@ class AuditLogSerializer(serializers.ModelSerializer):
 class AdminTenantMessageSerializer(serializers.ModelSerializer):
     sender_username  = serializers.CharField(source="sender.username", read_only=True)
     sender_full_name = serializers.SerializerMethodField()
+    file_url         = serializers.SerializerMethodField()
+    file_name        = serializers.SerializerMethodField()
 
     class Meta:
         model  = AdminTenantMessage
         fields = [
             "id", "tenant", "sender", "sender_username", "sender_full_name",
-            "sender_side", "content", "is_read", "created_at",
+            "sender_side", "content", "file", "file_url", "file_name",
+            "is_read", "created_at",
         ]
         read_only_fields = [
             "id", "tenant", "sender", "sender_username", "sender_full_name",
-            "sender_side", "is_read", "created_at",
+            "sender_side", "is_read", "created_at", "file_url", "file_name",
         ]
+        extra_kwargs = {"file": {"write_only": True, "required": False}}
 
     def get_sender_full_name(self, obj):
         if obj.sender:
             full = f"{obj.sender.first_name} {obj.sender.last_name}".strip()
             return full or obj.sender.username
         return "—"
+
+    def get_file_url(self, obj):
+        request = self.context.get("request")
+        if obj.file and request:
+            return request.build_absolute_uri(obj.file.url)
+        return None
+
+    def get_file_name(self, obj):
+        return obj.file.name.split("/")[-1] if obj.file else None
 
 
 class DocumentTemplateSerializer(serializers.ModelSerializer):
