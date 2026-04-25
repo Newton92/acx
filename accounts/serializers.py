@@ -69,10 +69,17 @@ class RoleSerializer(serializers.ModelSerializer):
 
 
 class MembershipSerializer(serializers.ModelSerializer):
+    tenant = TenantLiteSerializer(read_only=True)
+    user   = UserLiteSerializer(read_only=True)
+    roles  = serializers.SerializerMethodField()
+
     class Meta:
         model = Membership
         fields = ["id", "tenant", "user", "roles", "status", "is_owner", "created_at"]
         read_only_fields = ["id", "created_at"]
+
+    def get_roles(self, obj):
+        return list(obj.roles.values_list("id", flat=True))
 
     def create(self, validated_data):
         roles = validated_data.pop("roles", [])

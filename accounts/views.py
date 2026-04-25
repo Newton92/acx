@@ -186,9 +186,13 @@ class SuperAdminOnly(IsAuthenticated):
 
 class MembershipViewSet(viewsets.ModelViewSet):
     queryset = Membership.objects.select_related("tenant", "user").prefetch_related("roles").all()
-    serializer_class = MembershipSerializer
     permission_classes = [IsAuthenticated]
     filterset_fields = ["tenant", "user", "status"]
+
+    def get_serializer_class(self):
+        if self.request.method in ("POST", "PUT", "PATCH"):
+            return MembershipWriteSerializer
+        return MembershipSerializer
 
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
@@ -204,10 +208,10 @@ class MembershipViewSet(viewsets.ModelViewSet):
         if not data.get("user"):
             raise ValidationError({"user": "Champ requis. Envoyez user (id) ou utilisez user_id."})
 
-        serializer = self.get_serializer(data=data)
+        serializer = MembershipWriteSerializer(data=data)
         serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        return Response(serializer.data, status=201)
+        membership = serializer.save()
+        return Response(MembershipSerializer(membership).data, status=201)
 
 
 
