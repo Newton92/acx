@@ -8,6 +8,7 @@ from .views import (
     PaymentPromiseViewSet,
     PaymentViewSet,
     CollectionEmailViewSet,
+    TenantStatsView,
 )
 
 router = DefaultRouter()
@@ -25,4 +26,5 @@ router.register(r"collection-payments", PaymentViewSet, basename="collection-pay
 
 urlpatterns = [
     path("", include(router.urls)),
+    path("stats/", TenantStatsView.as_view(), name="tenant-stats"),
 ]

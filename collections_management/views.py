@@ -665,3 +665,124 @@ class CollectionEmailViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
         data = self.get_serializer(email_obj).data
         data["timeline_action_id"] = action_obj2.id
         return Response(data, status=201)
+
+
+# -------------------------------------------------------------------
+# Stats / Reporting
+# -------------------------------------------------------------------
+
+from datetime import date, timedelta
+from django.db.models import Count, Sum, Q
+from django.db.models.functions import TruncMonth
+from rest_framework.views import APIView
+
+
+class TenantStatsView(APIView):
+    permission_classes = [IsTenantMember]
+
+    def get(self, request):
+        tenant = resolve_tenant_from_request(request)
+        if not tenant:
+            return Response({"detail": "Tenant context missing."}, status=403)
+
+        cases = CollectionCase.objects.filter(tenant=tenant)
+
+        # Totals
+        totals = cases.aggregate(
+            total=Count("id"),
+            total_paid=Sum("total_paid_amount"),
+            principal=Sum("principal_amount"),
+            interest=Sum("interest_amount"),
+            penalty=Sum("penalty_amount"),
+            fees=Sum("fees_amount"),
+            overdue=Count("id", filter=Q(
+                next_action_date__lt=date.today(),
+                next_action_date__isnull=False,
+            )),
+        )
+        total_amount = float(
+            (totals["principal"] or 0)
+            + (totals["interest"] or 0)
+            + (totals["penalty"] or 0)
+            + (totals["fees"] or 0)
+        )
+        total_paid = float(totals["total_paid"] or 0)
+        recovery_rate = round(total_paid / total_amount * 100, 1) if total_amount > 0 else 0.0
+
+        # By status
+        by_status = [
+            {"status": s["status"], "count": s["count"], "total_paid": float(s["total_paid"] or 0)}
+            for s in cases.values("status").annotate(count=Count("id"), total_paid=Sum("total_paid_amount"))
+        ]
+
+        # By priority
+        by_priority = [
+            {"priority": p["priority"], "count": p["count"]}
+            for p in cases.values("priority").annotate(count=Count("id"))
+        ]
+
+        # Payments — last 6 months
+        six_months_ago = date.today().replace(day=1) - timedelta(days=150)
+        payments_qs = Payment.objects.filter(tenant=tenant)
+
+        monthly = [
+            {
+                "month": m["month"].strftime("%Y-%m"),
+                "amount": float(m["amount"] or 0),
+                "count": m["count"],
+            }
+            for m in (
+                payments_qs
+                .filter(paid_at__date__gte=six_months_ago)
+                .annotate(month=TruncMonth("paid_at"))
+                .values("month")
+                .annotate(amount=Sum("amount"), count=Count("id"))
+                .order_by("month")
+            )
+        ]
+
+        by_method = [
+            {"method": p["method"], "count": p["count"], "amount": float(p["amount"] or 0)}
+            for p in payments_qs.values("method").annotate(count=Count("id"), amount=Sum("amount"))
+        ]
+
+        # Actions by type
+        by_action_type = [
+            {"type": a["action_type"], "count": a["count"]}
+            for a in (
+                CollectionAction.objects
+                .filter(tenant=tenant)
+                .values("action_type")
+                .annotate(count=Count("id"))
+                .order_by("-count")
+            )
+        ]
+
+        # Promises
+        promises_qs = PaymentPromise.objects.filter(tenant=tenant)
+        promises = {
+            "pending":   promises_qs.filter(status="pending").count(),
+            "kept":      promises_qs.filter(status="kept").count(),
+            "broken":    promises_qs.filter(status="broken").count(),
+            "cancelled": promises_qs.filter(status="cancelled").count(),
+        }
+
+        return Response({
+            "cases": {
+                "total":         totals["total"] or 0,
+                "overdue":       totals["overdue"] or 0,
+                "total_amount":  total_amount,
+                "total_paid":    total_paid,
+                "recovery_rate": recovery_rate,
+                "by_status":     by_status,
+                "by_priority":   by_priority,
+            },
+            "payments": {
+                "by_method":     by_method,
+                "monthly_trend": monthly,
+            },
+            "actions": {
+                "by_type": by_action_type,
+            },
+            "promises": promises,
+        })
