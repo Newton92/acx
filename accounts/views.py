@@ -654,3 +654,131 @@ class PlatformStatsView(APIView):
                 for t in top_tenants
             ],
         })
+
+
+# -------------------------------------------------------------------
+# Integrations — Email, SMS, API Keys
+# -------------------------------------------------------------------
+
+from accounts.models import SmsConfig, TenantApiKey
+from django.conf import settings as django_settings
+from django.core.mail import send_mail
+
+
+class IntegrationEmailStatusView(APIView):
+    permission_classes = [SuperAdminOnly]
+
+    def get(self, request):
+        return Response({
+            "host":     getattr(django_settings, "EMAIL_HOST", ""),
+            "port":     getattr(django_settings, "EMAIL_PORT", 587),
+            "user":     getattr(django_settings, "EMAIL_HOST_USER", ""),
+            "use_tls":  getattr(django_settings, "EMAIL_USE_TLS", True),
+            "from":     getattr(django_settings, "DEFAULT_FROM_EMAIL", ""),
+            "is_configured": bool(getattr(django_settings, "EMAIL_HOST", "")),
+        })
+
+    def post(self, request):
+        """Envoyer un email de test à l'adresse fournie."""
+        to = request.data.get("to") or request.user.email
+        if not to:
+            return Response({"detail": "Adresse email de destination manquante."}, status=400)
+        try:
+            send_mail(
+                subject="[ACX] Email de test",
+                message="Ceci est un email de test envoyé depuis la plateforme ACX Collections.",
+                from_email=getattr(django_settings, "DEFAULT_FROM_EMAIL", None),
+                recipient_list=[to],
+                fail_silently=False,
+            )
+            return Response({"detail": f"Email envoyé à {to}."})
+        except Exception as e:
+            return Response({"detail": str(e)}, status=500)
+
+
+class SmsConfigView(APIView):
+    permission_classes = [SuperAdminOnly]
+
+    def get(self, request):
+        cfg = SmsConfig.get_or_create_singleton()
+        return Response({
+            "provider":   cfg.provider,
+            "sender_id":  cfg.sender_id,
+            "api_key":    "•" * 8 if cfg.api_key else "",
+            "api_secret": "•" * 8 if cfg.api_secret else "",
+            "is_active":  cfg.is_active,
+            "updated_at": cfg.updated_at,
+        })
+
+    def put(self, request):
+        cfg = SmsConfig.get_or_create_singleton()
+        data = request.data
+        cfg.provider  = data.get("provider", cfg.provider)
+        cfg.sender_id = data.get("sender_id", cfg.sender_id)
+        if data.get("api_key") and not all(c == "•" for c in data["api_key"]):
+            cfg.api_key = data["api_key"]
+        if data.get("api_secret") and not all(c == "•" for c in data["api_secret"]):
+            cfg.api_secret = data["api_secret"]
+        cfg.is_active  = data.get("is_active", cfg.is_active)
+        cfg.updated_by = request.user
+        cfg.save()
+        return Response({"detail": "Configuration SMS mise à jour."})
+
+
+class TenantApiKeyListView(APIView):
+    permission_classes = [SuperAdminOnly]
+
+    def get(self, request):
+        tenant_id = request.query_params.get("tenant_id")
+        qs = TenantApiKey.objects.select_related("tenant", "created_by")
+        if tenant_id:
+            qs = qs.filter(tenant_id=tenant_id)
+        return Response([
+            {
+                "id":           k.id,
+                "tenant_id":    k.tenant_id,
+                "tenant_name":  k.tenant.name,
+                "label":        k.label,
+                "key_prefix":   k.key_prefix,
+                "is_active":    k.is_active,
+                "created_by":   k.created_by.username if k.created_by else "—",
+                "last_used_at": k.last_used_at,
+                "created_at":   k.created_at,
+            }
+            for k in qs
+        ])
+
+    def post(self, request):
+        from tenancy.models import Tenant as TenantModel
+        tenant_id = request.data.get("tenant_id")
+        label     = (request.data.get("label") or "").strip()
+        if not tenant_id or not label:
+            return Response({"detail": "tenant_id et label sont requis."}, status=400)
+        try:
+            tenant = TenantModel.objects.get(pk=tenant_id)
+        except TenantModel.DoesNotExist:
+            return Response({"detail": "Tenant introuvable."}, status=404)
+
+        key_obj, raw_key = TenantApiKey.generate(tenant=tenant, label=label, created_by=request.user)
+        return Response({
+            "id":         key_obj.id,
+            "tenant_id":  key_obj.tenant_id,
+            "label":      key_obj.label,
+            "key_prefix": key_obj.key_prefix,
+            "raw_key":    raw_key,   # affiché UNE SEULE FOIS
+            "is_active":  key_obj.is_active,
+            "created_at": key_obj.created_at,
+        }, status=201)
+
+
+class TenantApiKeyDetailView(APIView):
+    permission_classes = [SuperAdminOnly]
+
+    def delete(self, request, pk):
+        try:
+            key = TenantApiKey.objects.get(pk=pk)
+        except TenantApiKey.DoesNotExist:
+            return Response({"detail": "Clé introuvable."}, status=404)
+        key.is_active = False
+        key.save(update_fields=["is_active"])
+        return Response({"detail": "Clé révoquée."})

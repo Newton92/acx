@@ -147,3 +147,78 @@ class AuditLog(models.Model):
 
 
 
+
+
+# ---------------------------------------------------------------------------
+# Intégrations
+# ---------------------------------------------------------------------------
+
+import secrets
+import hashlib
+
+
+class SmsConfig(models.Model):
+    """Configuration globale du provider SMS (singleton)."""
+
+    class Provider(models.TextChoices):
+        TWILIO = "twilio",  "Twilio"
+        ORANGE = "orange",  "Orange API"
+        MTN    = "mtn",     "MTN API"
+        AWS    = "aws",     "AWS SNS"
+        OTHER  = "other",   "Autre"
+
+    provider   = models.CharField(max_length=20, choices=Provider.choices, default=Provider.OTHER)
+    sender_id  = models.CharField(max_length=40, blank=True, default="")
+    api_key    = models.CharField(max_length=255, blank=True, default="")
+    api_secret = models.CharField(max_length=255, blank=True, default="")
+    is_active  = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="sms_config_updates",
+    )
+
+    class Meta:
+        verbose_name = "SMS Config"
+
+    @classmethod
+    def get_or_create_singleton(cls):
+        obj = cls.objects.first()
+        if not obj:
+            obj = cls.objects.create()
+        return obj
+
+
+class TenantApiKey(models.Model):
+    """Clé API générée pour un tenant afin d'accéder à l'API ACX programmatiquement."""
+
+    tenant     = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="api_keys")
+    label      = models.CharField(max_length=100)
+    key_prefix = models.CharField(max_length=12)   # "acx_XXXXXXXX" affiché toujours
+    key_hash   = models.CharField(max_length=64)   # SHA-256 de la clé complète
+    is_active  = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="created_api_keys",
+    )
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    created_at   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    @classmethod
+    def generate(cls, tenant, label, created_by=None):
+        raw = f"acx_{secrets.token_urlsafe(32)}"
+        h   = hashlib.sha256(raw.encode()).hexdigest()
+        obj = cls.objects.create(
+            tenant=tenant,
+            label=label,
+            key_prefix=raw[:12],
+            key_hash=h,
+            created_by=created_by,
+        )
+        return obj, raw  # raw affiché une seule fois
+
+    def __str__(self):
+        return f"{self.key_prefix}… ({self.tenant})"
