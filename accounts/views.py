@@ -526,3 +526,131 @@ class AdminDocumentsStatsView(APIView):
         ]
 
         return Response({"total": total, "by_type": by_type, "by_tenant": by_tenant, "recent": recent})
+
+
+# -------------------------------------------------------------------
+# Platform Stats (super admin)
+# -------------------------------------------------------------------
+
+from datetime import date, timedelta
+from django.db.models import Count, Sum, Q
+from django.db.models.functions import TruncMonth
+
+
+class SuperAdminOnly(IsAuthenticated):
+    def has_permission(self, request, view):
+        ok = super().has_permission(request, view)
+        return ok and bool(request.user and request.user.is_superuser)
+
+
+class PlatformStatsView(APIView):
+    permission_classes = [SuperAdminOnly]
+
+    def get(self, request):
+        from tenancy.models import Tenant
+        from collections_management.models import CollectionCase, CollectionAction, Payment, PaymentPromise
+
+        # Tenants
+        tenants_total = Tenant.objects.count()
+        tenants_active = Tenant.objects.filter(status="active").count()
+
+        # Cases — all tenants
+        cases = CollectionCase.objects.all()
+        totals = cases.aggregate(
+            total=Count("id"),
+            total_paid=Sum("total_paid_amount"),
+            principal=Sum("principal_amount"),
+            interest=Sum("interest_amount"),
+            penalty=Sum("penalty_amount"),
+            fees=Sum("fees_amount"),
+            overdue=Count("id", filter=Q(
+                next_action_date__lt=date.today(),
+                next_action_date__isnull=False,
+            )),
+        )
+        total_amount = float(
+            (totals["principal"] or 0)
+            + (totals["interest"] or 0)
+            + (totals["penalty"] or 0)
+            + (totals["fees"] or 0)
+        )
+        total_paid = float(totals["total_paid"] or 0)
+        recovery_rate = round(total_paid / total_amount * 100, 1) if total_amount > 0 else 0.0
+
+        by_status = [
+            {"status": s["status"], "count": s["count"]}
+            for s in cases.values("status").annotate(count=Count("id"))
+        ]
+
+        # Top tenants by case count
+        top_tenants = list(
+            cases.values("tenant__name")
+            .annotate(count=Count("id"), total_paid=Sum("total_paid_amount"))
+            .order_by("-count")[:10]
+        )
+
+        # Monthly payments — last 6 months
+        six_months_ago = date.today().replace(day=1) - timedelta(days=150)
+        payments_qs = Payment.objects.all()
+        monthly = [
+            {
+                "month": m["month"].strftime("%Y-%m"),
+                "amount": float(m["amount"] or 0),
+                "count": m["count"],
+            }
+            for m in (
+                payments_qs
+                .filter(paid_at__date__gte=six_months_ago)
+                .annotate(month=TruncMonth("paid_at"))
+                .values("month")
+                .annotate(amount=Sum("amount"), count=Count("id"))
+                .order_by("month")
+            )
+        ]
+
+        by_method = [
+            {"method": p["method"], "count": p["count"], "amount": float(p["amount"] or 0)}
+            for p in payments_qs.values("method").annotate(count=Count("id"), amount=Sum("amount"))
+        ]
+
+        # Actions by type
+        by_action_type = [
+            {"type": a["action_type"], "count": a["count"]}
+            for a in (
+                CollectionAction.objects
+                .values("action_type")
+                .annotate(count=Count("id"))
+                .order_by("-count")
+            )
+        ]
+
+        return Response({
+            "tenants": {
+                "total": tenants_total,
+                "active": tenants_active,
+                "suspended": tenants_total - tenants_active,
+            },
+            "cases": {
+                "total": totals["total"] or 0,
+                "overdue": totals["overdue"] or 0,
+                "total_amount": total_amount,
+                "total_paid": total_paid,
+                "recovery_rate": recovery_rate,
+                "by_status": by_status,
+            },
+            "payments": {
+                "by_method": by_method,
+                "monthly_trend": monthly,
+            },
+            "actions": {
+                "by_type": by_action_type,
+            },
+            "top_tenants": [
+                {
+                    "name": t["tenant__name"] or "—",
+                    "count": t["count"],
+                    "total_paid": float(t["total_paid"] or 0),
+                }
+                for t in top_tenants
+            ],
+        })
