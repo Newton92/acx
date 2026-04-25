@@ -350,4 +350,58 @@ def testmail(
     email.send(fail_silently=False)
 
 
+class AdminDocumentsStatsView(APIView):
+    """
+    GET /api/admin-documents/
+    Statistiques globales des documents (super admin uniquement).
+    """
+    permission_classes = [SuperAdminOnly]
 
+    def get(self, request):
+        from cases.models import CaseDocument
+        from django.db.models import Count
+
+        total = CaseDocument.objects.count()
+
+        by_type = list(
+            CaseDocument.objects
+            .values("doc_type")
+            .annotate(count=Count("id"))
+            .order_by("-count")
+        )
+
+        by_tenant_qs = (
+            CaseDocument.objects
+            .values("case__tenant__id", "case__tenant__name")
+            .annotate(count=Count("id"))
+            .order_by("-count")
+        )
+        by_tenant = [
+            {
+                "tenant_id":   r["case__tenant__id"],
+                "tenant_name": r["case__tenant__name"] or "—",
+                "count":       r["count"],
+            }
+            for r in by_tenant_qs
+        ]
+
+        recent_qs = (
+            CaseDocument.objects
+            .select_related("case", "case__tenant", "uploaded_by")
+            .order_by("-created_at")[:20]
+        )
+        recent = [
+            {
+                "id":             d.id,
+                "title":          d.title,
+                "doc_type":       d.doc_type,
+                "case_reference": d.case.reference if d.case else "—",
+                "tenant_name":    d.case.tenant.name if d.case and d.case.tenant else "—",
+                "uploaded_by":    d.uploaded_by.username if d.uploaded_by else "—",
+                "created_at":     d.created_at,
+                "file_url":       request.build_absolute_uri(d.file.url) if d.file else None,
+            }
+            for d in recent_qs
+        ]
+
+        return Response({"total": total, "by_type": by_type, "by_tenant": by_tenant, "recent": recent})
