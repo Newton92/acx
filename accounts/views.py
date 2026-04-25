@@ -402,7 +402,10 @@ class PlatformThreadView(APIView):
             tenant=tenant, sender_side=opposite, is_read=False
         ).update(is_read=True)
         msgs = AdminTenantMessage.objects.filter(tenant=tenant).select_related("sender")
-        return Response(AdminTenantMessageSerializer(msgs, many=True).data)
+        return Response({
+            "tenant": {"id": tenant.id, "name": tenant.name, "slug": tenant.slug},
+            "messages": AdminTenantMessageSerializer(msgs, many=True).data,
+        })
 
     def post(self, request, tenant_id):
         tenant, side = self._get_tenant_and_side(request, tenant_id)
