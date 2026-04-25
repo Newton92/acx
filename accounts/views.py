@@ -782,3 +782,36 @@ class TenantApiKeyDetailView(APIView):
         key.is_active = False
         key.save(update_fields=["is_active"])
         return Response({"detail": "Clé révoquée."})
+
+
+# -------------------------------------------------------------------
+# Platform Settings (super admin)
+# -------------------------------------------------------------------
+
+class PlatformSettingsView(APIView):
+    permission_classes = [SuperAdminOnly]
+
+    def get(self, request):
+        from accounts.models import PlatformSettings
+        cfg = PlatformSettings.get_or_create_singleton()
+        return Response({
+            "platform_name":    cfg.platform_name,
+            "default_currency": cfg.default_currency,
+            "default_language": cfg.default_language,
+            "timezone":         cfg.timezone,
+            "support_email":    cfg.support_email,
+            "updated_at":       cfg.updated_at,
+        })
+
+    def put(self, request):
+        from accounts.models import PlatformSettings
+        cfg = PlatformSettings.get_or_create_singleton()
+        data = request.data
+        cfg.platform_name    = data.get("platform_name",    cfg.platform_name)
+        cfg.default_currency = data.get("default_currency", cfg.default_currency)
+        cfg.default_language = data.get("default_language", cfg.default_language)
+        cfg.timezone         = data.get("timezone",         cfg.timezone)
+        cfg.support_email    = data.get("support_email",    cfg.support_email)
+        cfg.updated_by       = request.user
+        cfg.save()
+        return Response({"detail": "Paramètres mis à jour."})

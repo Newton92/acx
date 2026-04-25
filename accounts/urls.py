@@ -8,7 +8,8 @@ from .views import UserViewSet, RoleViewSet, TenantMembershipViewSet, Membership
     SessionViewSet, LogoutView, testmail, AdminDocumentsStatsView, DocumentTemplateViewSet, \
     PlatformInboxView, PlatformThreadView, PlatformUnreadView, PlatformMessageDeleteView, \
     PlatformStatsView, \
-    IntegrationEmailStatusView, SmsConfigView, TenantApiKeyListView, TenantApiKeyDetailView
+    IntegrationEmailStatusView, SmsConfigView, TenantApiKeyListView, TenantApiKeyDetailView, \
+    PlatformSettingsView
 from .views_tenant_users import tenant_users, tenant_user_update, tenant_user_toggle_active, \
     tenant_user_membership_update, tenant_user_remove
 
@@ -76,6 +77,7 @@ urlpatterns = [
     path("integration/sms/",           SmsConfigView.as_view(),               name="integration-sms"),
     path("integration/api-keys/",      TenantApiKeyListView.as_view(),        name="integration-api-keys"),
     path("integration/api-keys/<int:pk>/", TenantApiKeyDetailView.as_view(),  name="integration-api-key-detail"),
+    path("platform-settings/",            PlatformSettingsView.as_view(),       name="platform-settings"),
     path("platform-messages/inbox/",         PlatformInboxView.as_view(),   name="platform-messages-inbox"),
     path("platform-messages/unread/",        PlatformUnreadView.as_view(),  name="platform-messages-unread"),
     path("platform-messages/<int:tenant_id>/", PlatformThreadView.as_view(), name="platform-messages-thread"),

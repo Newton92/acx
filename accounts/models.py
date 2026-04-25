@@ -222,3 +222,29 @@ class TenantApiKey(models.Model):
 
     def __str__(self):
         return f"{self.key_prefix}… ({self.tenant})"
+
+
+class PlatformSettings(models.Model):
+    """Paramètres globaux de la plateforme (singleton)."""
+
+    platform_name    = models.CharField(max_length=120, default="ACX Collections")
+    default_currency = models.CharField(max_length=3, default="XAF")
+    default_language = models.CharField(max_length=5, default="fr",
+                                        choices=[("fr", "Français"), ("en", "English")])
+    timezone         = models.CharField(max_length=60, default="Africa/Douala")
+    support_email    = models.EmailField(blank=True, default="")
+    updated_at       = models.DateTimeField(auto_now=True)
+    updated_by       = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="platform_settings_updates",
+    )
+
+    class Meta:
+        verbose_name = "Platform Settings"
+
+    @classmethod
+    def get_or_create_singleton(cls):
+        obj = cls.objects.first()
+        if not obj:
+            obj = cls.objects.create()
+        return obj

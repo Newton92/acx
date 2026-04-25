@@ -7,9 +7,19 @@ from accounts.models import Membership
 from customers.models import CustomerMembership
 
 
-@api_view(["GET"])
+@api_view(["GET", "PATCH"])
 @permission_classes([IsAuthenticated])
 def me(request):
+    if request.method == "PATCH":
+        u = request.user
+        u.first_name = request.data.get("first_name", u.first_name)
+        u.last_name  = request.data.get("last_name",  u.last_name)
+        email = (request.data.get("email") or "").strip()
+        if email:
+            u.email = email
+        u.save(update_fields=["first_name", "last_name", "email"])
+        return Response({"detail": "Profil mis à jour."})
+
     u = request.user
 
     active_tenant = None
