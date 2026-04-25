@@ -86,6 +86,30 @@ class DocumentTemplate(models.Model):
         return self.title
 
 
+class AdminTenantMessage(models.Model):
+    class SenderSide(models.TextChoices):
+        ADMIN  = "admin",  "Super Admin"
+        TENANT = "tenant", "Tenant"
+
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.CASCADE, related_name="platform_messages"
+    )
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="sent_platform_messages",
+    )
+    sender_side = models.CharField(max_length=10, choices=SenderSide.choices)
+    content     = models.TextField()
+    is_read     = models.BooleanField(default=False)
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"[{self.sender_side}] {self.tenant} — {self.created_at:%Y-%m-%d %H:%M}"
+
+
 class AuditLog(models.Model):
     """
     Journal des actions d'administration (RBAC, tenants, users, etc.)

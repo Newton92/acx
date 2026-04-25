@@ -5,7 +5,8 @@ from rest_framework.routers import DefaultRouter
 from cases.views_customer_portal_cases import CustomerPortalCaseDetailView
 from customers.views import CustomerPortalMeView
 from .views import UserViewSet, RoleViewSet, TenantMembershipViewSet, MembershipViewSet, AuditLogViewSet, \
-    SessionViewSet, LogoutView, testmail, AdminDocumentsStatsView, DocumentTemplateViewSet
+    SessionViewSet, LogoutView, testmail, AdminDocumentsStatsView, DocumentTemplateViewSet, \
+    PlatformInboxView, PlatformThreadView, PlatformUnreadView
 from .views_tenant_users import tenant_users, tenant_user_update, tenant_user_toggle_active, \
     tenant_user_membership_update, tenant_user_remove
 
@@ -68,6 +69,9 @@ urlpatterns = [
 
     path('test_mail', testmail, name="test_mail"),
     path("admin-documents/", AdminDocumentsStatsView.as_view(), name="admin-documents"),
+    path("platform-messages/inbox/",         PlatformInboxView.as_view(),   name="platform-messages-inbox"),
+    path("platform-messages/unread/",        PlatformUnreadView.as_view(),  name="platform-messages-unread"),
+    path("platform-messages/<int:tenant_id>/", PlatformThreadView.as_view(), name="platform-messages-thread"),
 
     path("", include(router.urls)),
     path('', include('django.contrib.auth.urls')),

@@ -1,7 +1,7 @@
 # accounts/serializers.py
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
-from .models import Membership, Role, AuditLog, DocumentTemplate
+from .models import Membership, Role, AuditLog, DocumentTemplate, AdminTenantMessage
 from tenancy.models import Tenant
 User = get_user_model()
 
@@ -152,6 +152,28 @@ class AuditLogSerializer(serializers.ModelSerializer):
             "metadata",
             "created_at",
         ]
+
+
+class AdminTenantMessageSerializer(serializers.ModelSerializer):
+    sender_username  = serializers.CharField(source="sender.username", read_only=True)
+    sender_full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = AdminTenantMessage
+        fields = [
+            "id", "tenant", "sender", "sender_username", "sender_full_name",
+            "sender_side", "content", "is_read", "created_at",
+        ]
+        read_only_fields = [
+            "id", "tenant", "sender", "sender_username", "sender_full_name",
+            "sender_side", "is_read", "created_at",
+        ]
+
+    def get_sender_full_name(self, obj):
+        if obj.sender:
+            full = f"{obj.sender.first_name} {obj.sender.last_name}".strip()
+            return full or obj.sender.username
+        return "—"
 
 
 class DocumentTemplateSerializer(serializers.ModelSerializer):

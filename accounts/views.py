@@ -13,12 +13,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from accounts.models import Membership, Role, DocumentTemplate
+from django.shortcuts import get_object_or_404
+from accounts.models import Membership, Role, DocumentTemplate, AdminTenantMessage
 from accounts.permissions import IsPlatformSuperAdmin, IsTenantAdminOrSuperAdmin
 from accounts.serializers import (
     UserSerializer, UserCreateSerializer,
     MembershipSerializer, RoleSerializer, MembershipWriteSerializer,
-    DocumentTemplateSerializer,
+    DocumentTemplateSerializer, AdminTenantMessageSerializer,
 )
 from tenancy.models import Tenant
 
@@ -349,6 +350,86 @@ def testmail(
     )
     email.attach_alternative(html_content, "text/html")
     email.send(fail_silently=False)
+
+
+class PlatformInboxView(APIView):
+    """GET /api/platform-messages/inbox/ — super admin : liste tous les threads tenants"""
+    permission_classes = [SuperAdminOnly]
+
+    def get(self, request):
+        tenants = Tenant.objects.all().order_by("name")
+        result = []
+        for tenant in tenants:
+            qs     = AdminTenantMessage.objects.filter(tenant=tenant)
+            last   = qs.last()
+            unread = qs.filter(sender_side="tenant", is_read=False).count()
+            result.append({
+                "tenant_id":        tenant.id,
+                "tenant_name":      tenant.name,
+                "tenant_slug":      tenant.slug,
+                "last_message":     last.content[:120] if last else None,
+                "last_message_at":  last.created_at if last else None,
+                "last_sender_side": last.sender_side if last else None,
+                "unread":           unread,
+            })
+        result.sort(key=lambda x: (
+            0 if x["unread"] > 0 else 1,
+            -(x["last_message_at"].timestamp() if x["last_message_at"] else 0),
+        ))
+        return Response(result)
+
+
+class PlatformThreadView(APIView):
+    """
+    GET  /api/platform-messages/{tenant_id}/ — messages du thread
+    POST /api/platform-messages/{tenant_id}/ — envoyer un message
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _get_tenant_and_side(self, request, tenant_id):
+        from rest_framework.exceptions import PermissionDenied
+        tenant = get_object_or_404(Tenant, pk=tenant_id)
+        if request.user.is_superuser:
+            return tenant, "admin"
+        if Membership.objects.filter(tenant=tenant, user=request.user).exists():
+            return tenant, "tenant"
+        raise PermissionDenied()
+
+    def get(self, request, tenant_id):
+        tenant, side = self._get_tenant_and_side(request, tenant_id)
+        opposite = "tenant" if side == "admin" else "admin"
+        AdminTenantMessage.objects.filter(
+            tenant=tenant, sender_side=opposite, is_read=False
+        ).update(is_read=True)
+        msgs = AdminTenantMessage.objects.filter(tenant=tenant).select_related("sender")
+        return Response(AdminTenantMessageSerializer(msgs, many=True).data)
+
+    def post(self, request, tenant_id):
+        tenant, side = self._get_tenant_and_side(request, tenant_id)
+        content = (request.data.get("content") or "").strip()
+        if not content:
+            return Response({"detail": "Le message ne peut pas être vide."}, status=400)
+        msg = AdminTenantMessage.objects.create(
+            tenant=tenant,
+            sender=request.user,
+            sender_side=side,
+            content=content,
+        )
+        return Response(AdminTenantMessageSerializer(msg).data, status=201)
+
+
+class PlatformUnreadView(APIView):
+    """GET /api/platform-messages/unread/ — tenant : nb de messages non lus venant de l'admin"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        membership = Membership.objects.filter(user=request.user).select_related("tenant").first()
+        if not membership:
+            return Response({"unread": 0})
+        count = AdminTenantMessage.objects.filter(
+            tenant=membership.tenant, sender_side="admin", is_read=False
+        ).count()
+        return Response({"unread": count})
 
 
 class DocumentTemplateViewSet(viewsets.ModelViewSet):
