@@ -1,4 +1,8 @@
 # accounts/api.py
+import re
+
+from django.contrib.auth import get_user_model
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -6,18 +10,49 @@ from rest_framework.response import Response
 from accounts.models import Membership
 from customers.models import CustomerMembership
 
+User = get_user_model()
+
+_USERNAME_RE = re.compile(r'^[\w.@+\-]+$')
+
 
 @api_view(["GET", "PATCH"])
 @permission_classes([IsAuthenticated])
 def me(request):
     if request.method == "PATCH":
         u = request.user
+        update_fields = []
+
+        # ── Username ──────────────────────────────────────────────────────
+        new_username = (request.data.get("username") or "").strip()
+        if new_username and new_username != u.username:
+            if not _USERNAME_RE.match(new_username):
+                return Response(
+                    {"field": "username", "detail": "Caractères autorisés : lettres, chiffres, @, ., +, -, _"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if len(new_username) > 150:
+                return Response(
+                    {"field": "username", "detail": "150 caractères maximum."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # Unicité globale — insensible à la casse
+            if User.objects.exclude(pk=u.pk).filter(username__iexact=new_username).exists():
+                return Response(
+                    {"field": "username", "detail": "Ce nom d'utilisateur est déjà utilisé par un autre compte."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            u.username = new_username
+            update_fields.append("username")
+
+        # ── Autres champs ─────────────────────────────────────────────────
         u.first_name = request.data.get("first_name", u.first_name)
         u.last_name  = request.data.get("last_name",  u.last_name)
         email = (request.data.get("email") or "").strip()
         if email:
             u.email = email
-        u.save(update_fields=["first_name", "last_name", "email"])
+        update_fields += ["first_name", "last_name", "email"]
+
+        u.save(update_fields=update_fields)
         return Response({"detail": "Profil mis à jour."})
 
     u = request.user
