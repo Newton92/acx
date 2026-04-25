@@ -13,11 +13,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from accounts.models import Membership, Role
+from accounts.models import Membership, Role, DocumentTemplate
 from accounts.permissions import IsPlatformSuperAdmin, IsTenantAdminOrSuperAdmin
 from accounts.serializers import (
     UserSerializer, UserCreateSerializer,
-    MembershipSerializer, RoleSerializer, MembershipWriteSerializer
+    MembershipSerializer, RoleSerializer, MembershipWriteSerializer,
+    DocumentTemplateSerializer,
 )
 from tenancy.models import Tenant
 
@@ -348,6 +349,24 @@ def testmail(
     )
     email.attach_alternative(html_content, "text/html")
     email.send(fail_silently=False)
+
+
+class DocumentTemplateViewSet(viewsets.ModelViewSet):
+    queryset = DocumentTemplate.objects.select_related("created_by").all()
+    serializer_class = DocumentTemplateSerializer
+
+    def get_permissions(self):
+        if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            return [SuperAdminOnly()]
+        return [IsAuthenticated()]
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["request"] = self.request
+        return ctx
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
 
 
 class AdminDocumentsStatsView(APIView):

@@ -59,6 +59,33 @@ class Membership(models.Model):
 
 
 
+class DocumentTemplate(models.Model):
+    CATEGORY_CHOICES = [
+        ("amiable",   "Amiable"),
+        ("juridique", "Juridique"),
+        ("accord",    "Accord"),
+        ("paiement",  "Paiement"),
+        ("autre",     "Autre"),
+    ]
+
+    title       = models.CharField(max_length=220)
+    description = models.TextField(blank=True)
+    category    = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default="autre")
+    file        = models.FileField(upload_to="templates/documents/")
+    created_by  = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="document_templates",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.title
+
+
 class AuditLog(models.Model):
     """
     Journal des actions d'administration (RBAC, tenants, users, etc.)

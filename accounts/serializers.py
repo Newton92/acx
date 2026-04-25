@@ -1,7 +1,7 @@
 # accounts/serializers.py
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
-from .models import Membership, Role, AuditLog
+from .models import Membership, Role, AuditLog, DocumentTemplate
 from tenancy.models import Tenant
 User = get_user_model()
 
@@ -152,3 +152,29 @@ class AuditLogSerializer(serializers.ModelSerializer):
             "metadata",
             "created_at",
         ]
+
+
+class DocumentTemplateSerializer(serializers.ModelSerializer):
+    created_by_username = serializers.CharField(source="created_by.username", read_only=True)
+    file_url  = serializers.SerializerMethodField()
+    file_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = DocumentTemplate
+        fields = [
+            "id", "title", "description", "category",
+            "file", "file_url", "file_name",
+            "created_by", "created_by_username",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "created_by", "created_by_username", "created_at", "updated_at"]
+        extra_kwargs = {"file": {"write_only": True, "required": False}}
+
+    def get_file_url(self, obj):
+        request = self.context.get("request")
+        if obj.file and request:
+            return request.build_absolute_uri(obj.file.url)
+        return None
+
+    def get_file_name(self, obj):
+        return obj.file.name.split("/")[-1] if obj.file else None

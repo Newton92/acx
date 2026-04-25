@@ -5,7 +5,7 @@ from rest_framework.routers import DefaultRouter
 from cases.views_customer_portal_cases import CustomerPortalCaseDetailView
 from customers.views import CustomerPortalMeView
 from .views import UserViewSet, RoleViewSet, TenantMembershipViewSet, MembershipViewSet, AuditLogViewSet, \
-    SessionViewSet, LogoutView, testmail, AdminDocumentsStatsView
+    SessionViewSet, LogoutView, testmail, AdminDocumentsStatsView, DocumentTemplateViewSet
 from .views_tenant_users import tenant_users, tenant_user_update, tenant_user_toggle_active, \
     tenant_user_membership_update, tenant_user_remove
 
@@ -60,6 +60,7 @@ router.register(r"memberships", MembershipViewSet, basename="memberships")
 
 router.register(r"audit-logs", AuditLogViewSet, basename="audit-logs")
 router.register(r"sessions", SessionViewSet, basename="sessions")
+router.register(r"document-templates", DocumentTemplateViewSet, basename="document-templates")
 
 
 urlpatterns = [
