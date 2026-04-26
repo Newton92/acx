@@ -56,8 +56,14 @@ def record_payment_inflow(
     # Dimensions
     case = getattr(payment, "case", None)
 
-    # Créancier (Customer) : on tente plusieurs chemins (robuste selon votre modèle)
-    customer = getattr(payment, "customer", None) or getattr(case, "customer", None)
+    # Client du tenant (Customer / créancier).
+    # Dans ACX, CollectionCase.debtor → customers.Customer (ACX_DEBTOR_MODEL).
+    # CollectionCase n'a pas de champ "customer", on lit donc "debtor".
+    customer = (
+        getattr(payment, "customer", None)
+        or getattr(case, "customer", None)   # si le modèle évolue
+        or getattr(case, "debtor", None)     # chemin ACX actuel
+    )
 
     portfolio = getattr(case, "portfolio", None) if case else None
     if customer is None and portfolio is not None:

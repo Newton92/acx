@@ -1,9 +1,16 @@
 from __future__ import annotations
 
 from django.apps import apps
+from django.conf import settings as django_settings
 from rest_framework import serializers
 
 from .models import TreasuryAccount, TreasuryMovement, RemittanceBatch, RemittanceLine
+
+# ACX_DEBTOR_MODEL == "customers.Customer" signifie que CollectionCase.debtor
+# pointe vers customers.Customer (le créancier/client du tenant), PAS le vrai débiteur.
+_DEBTOR_IS_CUSTOMER = (
+    getattr(django_settings, "ACX_DEBTOR_MODEL", "") == "customers.Customer"
+)
 
 
 def _customer_display(customer) -> str | None:
@@ -11,7 +18,6 @@ def _customer_display(customer) -> str | None:
     if not customer:
         return None
 
-    # Common fields (we keep this defensive because Customer schema may vary)
     for attr in ("full_name", "name", "company_name", "display_name", "title"):
         v = getattr(customer, attr, None)
         if isinstance(v, str) and v.strip():
@@ -24,11 +30,24 @@ def _customer_display(customer) -> str | None:
         return None
 
 
+def _debtor_display(debtor) -> str | None:
+    """Best-effort display name for a Debtor instance (person owing money)."""
+    if not debtor:
+        return None
+    for attr in ("full_name", "name", "display_name", "label"):
+        val = getattr(debtor, attr, None)
+        if val:
+            return val
+    first = getattr(debtor, "first_name", None) or ""
+    last  = getattr(debtor, "last_name",  None) or ""
+    name  = f"{first} {last}".strip()
+    return name or str(debtor)
+
+
 def _resolve_customer_from_portfolio(portfolio):
     """Try to resolve a customer object from a portfolio-like object."""
     if not portfolio:
         return None
-    # Most common naming
     for attr in ("customer", "client", "owner"):
         try:
             v = getattr(portfolio, attr, None)
@@ -79,70 +98,69 @@ class TreasuryMovementSerializer(serializers.ModelSerializer):
         case = getattr(obj, "case", None)
         return getattr(case, "reference", None) or getattr(case, "case_number", None) if case else None
 
-    def get_debtor_name(self, obj) -> str | None:
+    def _get_core_case(self, obj):
+        """
+        Charge cases.Case via la référence du CollectionCase lié.
+        Résultat mis en cache sur l'instance pour éviter deux requêtes par ligne.
+        """
+        if getattr(obj, "_acx_core_case_loaded", False):
+            return getattr(obj, "_acx_core_case", None)
+        obj._acx_core_case_loaded = True
+
         case = getattr(obj, "case", None)
-        if not case:
-            return None
-        debtor = getattr(case, "debtor", None)
-        if not debtor:
-            return None
-        for attr in ("full_name", "name", "display_name", "label"):
-            val = getattr(debtor, attr, None)
-            if val:
-                return val
-        first = getattr(debtor, "first_name", None) or ""
-        last = getattr(debtor, "last_name", None) or ""
-        name = (f"{first} {last}").strip()
-        return name or str(debtor)
+        ref  = getattr(case, "reference", None) if case else None
+        tenant = getattr(obj, "tenant", None)
 
-    def _resolve_customer_from_case(self, obj):
-        """
-        Best-effort customer resolution even if obj.customer is NULL.
+        if not ref or not tenant:
+            obj._acx_core_case = None
+            return None
 
-        Why?
-        Some legacy movements might have been created without setting `customer`.
-        We still want the journal to show the client and allow the UI to display it.
-        """
-        # 1) direct FK
+        try:
+            CoreCase = apps.get_model("cases", "Case")
+            core = (
+                CoreCase.objects.filter(tenant=tenant, reference=ref)
+                .select_related("debtor", "portfolio")
+                .first()
+            )
+            obj._acx_core_case = core
+            return core
+        except Exception:
+            obj._acx_core_case = None
+            return None
+
+    def get_customer_name(self, obj) -> str | None:
+        # 1) FK directe sur le mouvement (bien renseignée)
         customer = getattr(obj, "customer", None)
         if customer:
-            return customer
+            return _customer_display(customer)
 
-        # 2) via collection case -> portfolio
-        case = getattr(obj, "case", None)
-        portfolio = getattr(case, "portfolio", None) if case else None
-        customer = _resolve_customer_from_portfolio(portfolio)
-        if customer:
-            return customer
+        # 2) CollectionCase.debtor pointe vers customers.Customer dans ACX
+        if _DEBTOR_IS_CUSTOMER:
+            case = getattr(obj, "case", None)
+            debtor_as_customer = getattr(case, "debtor", None) if case else None
+            if debtor_as_customer:
+                return _customer_display(debtor_as_customer)
 
-        # 3) via core Case model (cases.Case) using reference (if available)
-        ref = getattr(case, "reference", None) if case else None
-        tenant = getattr(obj, "tenant", None)
-        if ref and tenant:
-            try:
-                CoreCase = apps.get_model("cases", "Case")
-                core = (
-                    CoreCase.objects.filter(tenant=tenant, reference=ref)
-                    .select_related("portfolio")
-                    .first()
-                )
-                if core:
-                    # Some schemas may store customer directly on core case
-                    customer = getattr(core, "customer", None) or getattr(core, "client", None)
-                    if customer:
-                        return customer
-                    customer = _resolve_customer_from_portfolio(getattr(core, "portfolio", None))
-                    if customer:
-                        return customer
-            except Exception:
-                # Do not crash serialization
-                return None
+        # 3) Via cases.Case.customer (fallback)
+        core = self._get_core_case(obj)
+        if core:
+            customer = getattr(core, "customer", None) or getattr(core, "client", None)
+            if customer:
+                return _customer_display(customer)
+            customer = _resolve_customer_from_portfolio(getattr(core, "portfolio", None))
+            if customer:
+                return _customer_display(customer)
 
         return None
 
-    def get_customer_name(self, obj) -> str | None:
-        customer = self._resolve_customer_from_case(obj)
-        return _customer_display(customer)
+    def get_debtor_name(self, obj) -> str | None:
+        # Le vrai débiteur (personne qui doit l'argent) est sur cases.Case.debtor.
+        # CollectionCase.debtor pointe vers customers.Customer dans cette config ACX,
+        # donc on NE lit PAS case.debtor ici.
+        core = self._get_core_case(obj)
+        if core:
+            return _debtor_display(getattr(core, "debtor", None))
+        return None
 
     def get_source_label(self, obj) -> str:
         try:
