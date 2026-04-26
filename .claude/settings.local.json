@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git add *)",
+      "Bash(python manage.py showmigrations accounts)",
+      "Bash(git commit *)",
+      "Bash(dir /s /b \"C:\\\\Users\\\\Administrateur\\\\Documents\\\\front-acx\\\\app\\\\*layout*\")",
+      "Read(//c/Users/Administrateur/PycharmProjects/**)",
+      "Bash(python -c \"from collections_management.views import TenantStatsView; print\\('OK'\\)\")",
+      "Bash(python -m py_compile C:/Users/Administrateur/PycharmProjects/acx/collections_management/urls.py)",
+      "Bash(python -m py_compile C:/Users/Administrateur/PycharmProjects/acx/accounts/views.py)",
+      "Bash(python -m py_compile C:/Users/Administrateur/PycharmProjects/acx/accounts/urls.py)",
+      "Read(//c/Users/Administrateur/Documents/front-acx/app/**)",
+      "Bash(python -m py_compile C:/Users/Administrateur/PycharmProjects/acx/accounts/models.py)",
+      "Bash(python manage.py makemigrations accounts --name integrations_smsconfig_apikey)",
+      "Bash(python -m py_compile C:/Users/Administrateur/PycharmProjects/acx/accounts/models.py C:/Users/Administrateur/PycharmProjects/acx/accounts/views.py C:/Users/Administrateur/PycharmProjects/acx/accounts/api.py)",
+      "Bash(python manage.py makemigrations accounts)",
+      "Bash(\".venv\\\\Scripts\\\\python.exe\" manage.py makemigrations accounts)",
+      "Bash(\".venv\\\\Scripts\\\\python.exe\" manage.py migrate)",
+      "Bash(\".venv\\\\Scripts\\\\python.exe\" manage.py shell -c \"from accounts.models import Role; Role.objects.get_or_create\\(id=5\\); print\\('Role 5 \\(Responsable Pays\\) créé.'\\)\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Administrateur\\Documents\\front-acx\\app\\[locale]\\(admin)\\admin"
+    ]
+  }
+}

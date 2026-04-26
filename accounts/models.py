@@ -10,12 +10,14 @@ class Role(models.Model):
     WRITER = 2
     APPROVER = 3
     ADMIN = 4
+    COUNTRY_MANAGER = 5
 
     ROLE_CHOICES = (
         (PERSONAL, "Personnel entreprise"),
         (WRITER, "Personnel ACREMAC"),
         (APPROVER, "Administrateur entreprise"),
         (ADMIN, "Administrateur"),
+        (COUNTRY_MANAGER, "Responsable Pays"),
     )
 
     id = models.PositiveSmallIntegerField(choices=ROLE_CHOICES, primary_key=True)
@@ -248,3 +250,124 @@ class PlatformSettings(models.Model):
         if not obj:
             obj = cls.objects.create()
         return obj
+
+
+# ---------------------------------------------------------------------------
+# Mail entrant — configuration IMAP + interception
+# ---------------------------------------------------------------------------
+
+class MailInboxConfig(models.Model):
+    """Configuration IMAP d'un tenant pour recevoir les mails de ses clients."""
+
+    tenant = models.OneToOneField(
+        Tenant, on_delete=models.CASCADE, related_name="mail_inbox_config"
+    )
+    imap_host = models.CharField(max_length=255)
+    imap_port = models.PositiveSmallIntegerField(default=993)
+    imap_user = models.CharField(max_length=255)
+    imap_password = models.CharField(max_length=500)
+    use_ssl = models.BooleanField(default=True)
+    mailbox = models.CharField(max_length=100, default="INBOX")
+    is_active = models.BooleanField(default=True)
+    last_polled_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"IMAP {self.imap_user} ({self.tenant})"
+
+
+class MailSource(models.Model):
+    """Expéditeur autorisé (client / domaine) pour le mail entrant d'un tenant."""
+
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.CASCADE, related_name="mail_sources"
+    )
+    client_name = models.CharField(max_length=255, blank=True)
+    email_or_domain = models.CharField(max_length=255)
+    notes = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("tenant", "email_or_domain")]
+        ordering = ["client_name", "email_or_domain"]
+
+    def __str__(self):
+        label = self.client_name or self.email_or_domain
+        return f"{label} ({self.tenant})"
+
+    @property
+    def is_domain(self):
+        return "@" not in self.email_or_domain
+
+
+class IncomingMail(models.Model):
+    """Mail intercepté via IMAP pour un tenant."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "En attente"
+        DISPATCHED = "dispatched", "Dispatché"
+        PROCESSED = "processed", "Traité"
+        REJECTED = "rejected", "Rejeté"
+
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.CASCADE, related_name="incoming_mails"
+    )
+    mail_source = models.ForeignKey(
+        MailSource, on_delete=models.SET_NULL, null=True, blank=True, related_name="mails"
+    )
+    message_id = models.CharField(max_length=500, unique=True)
+    from_email = models.EmailField()
+    from_name = models.CharField(max_length=255, blank=True)
+    subject = models.CharField(max_length=998, blank=True)
+    body_text = models.TextField(blank=True)
+    body_html = models.TextField(blank=True)
+    received_at = models.DateTimeField()
+
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="assigned_mails",
+    )
+    assigned_country = models.CharField(max_length=2, blank=True)
+    dispatched_at = models.DateTimeField(null=True, blank=True)
+    dispatched_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="dispatched_mails",
+    )
+    dispatch_note = models.TextField(blank=True)
+    case = models.ForeignKey(
+        "cases.Case", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="incoming_mails",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-received_at"]
+
+    def __str__(self):
+        return f"[{self.status}] {self.from_email} — {self.subject[:60]}"
+
+
+class MailAttachment(models.Model):
+    """Pièce jointe d'un mail intercepté."""
+
+    mail = models.ForeignKey(
+        IncomingMail, on_delete=models.CASCADE, related_name="attachments"
+    )
+    filename = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=120, blank=True)
+    size = models.PositiveIntegerField(default=0)
+    file = models.FileField(upload_to="mail_attachments/")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.filename} ({self.mail_id})"
