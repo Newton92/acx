@@ -13,7 +13,7 @@ from .views import UserViewSet, RoleViewSet, TenantMembershipViewSet, Membership
 from .views_tenant_users import tenant_users, tenant_user_update, tenant_user_toggle_active, \
     tenant_user_membership_update, tenant_user_remove
 from .views_mail_config import (
-    mail_imap_config, mail_imap_test, mail_imap_poll,
+    mail_imap_config, mail_imap_test, mail_imap_poll, mail_cron_status,
     mail_sources, mail_source_detail, mail_source_toggle,
     mail_inbox, mail_inbox_detail,
     mail_dispatch, mail_reject, mail_restore, mail_mark_processed,
@@ -178,6 +178,7 @@ urlpatterns = [
     path("tenant/mail/imap/", mail_imap_config, name="tenant-mail-imap"),
     path("tenant/mail/imap/test/", mail_imap_test, name="tenant-mail-imap-test"),
     path("tenant/mail/imap/poll/", mail_imap_poll, name="tenant-mail-imap-poll"),
+    path("tenant/mail/imap/status/", mail_cron_status, name="tenant-mail-cron-status"),
 
     # Mail entrant — sources
     path("tenant/mail/sources/", mail_sources, name="tenant-mail-sources"),

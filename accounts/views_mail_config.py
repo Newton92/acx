@@ -2,18 +2,19 @@
 Mail entrant — API views pour la configuration IMAP, les sources et l'inbox.
 
 Routes:
-  GET/PUT    /tenant/mail/imap/           → config IMAP (singleton par tenant)
-  POST       /tenant/mail/imap/test/      → tester la connexion IMAP
-  POST       /tenant/mail/imap/poll/      → déclencher un poll immédiat
-  GET/POST   /tenant/mail/sources/        → lister / créer une source
-  PATCH/DEL  /tenant/mail/sources/<id>/   → modifier / supprimer
-  POST       /tenant/mail/sources/<id>/toggle/  → activer/désactiver
-  GET        /tenant/mail/inbox/          → liste mails interceptés
-  GET        /tenant/mail/inbox/<id>/     → détail + pièces jointes
-  POST       /tenant/mail/inbox/<id>/dispatch/  → dispatcher au responsable pays
-  POST       /tenant/mail/inbox/<id>/reject/    → rejeter
-  POST       /tenant/mail/inbox/<id>/restore/   → remettre en attente
-  GET        /tenant/mail/country-managers/     → liste des responsables pays du tenant
+  GET/PUT    /tenant/mail/imap/            → config IMAP (singleton par tenant)
+  POST       /tenant/mail/imap/test/       → tester la connexion IMAP
+  POST       /tenant/mail/imap/poll/       → déclencher un poll immédiat
+  GET        /tenant/mail/imap/status/     → statut du service de polling (heartbeat)
+  GET/POST   /tenant/mail/sources/         → lister / créer une source
+  PATCH/DEL  /tenant/mail/sources/<id>/    → modifier / supprimer
+  POST       /tenant/mail/sources/<id>/toggle/   → activer/désactiver
+  GET        /tenant/mail/inbox/           → liste mails interceptés
+  GET        /tenant/mail/inbox/<id>/      → détail + pièces jointes
+  POST       /tenant/mail/inbox/<id>/dispatch/   → dispatcher au responsable pays
+  POST       /tenant/mail/inbox/<id>/reject/     → rejeter
+  POST       /tenant/mail/inbox/<id>/restore/    → remettre en attente
+  GET        /tenant/mail/country-managers/      → liste des responsables pays du tenant
 """
 
 import imaplib
@@ -252,6 +253,80 @@ def mail_imap_poll(request):
         })
     except Exception as e:
         return Response({"success": False, "message": str(e)}, status=500)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def mail_cron_status(request):
+    """
+    Retourne l'état du service de polling pour ce tenant.
+
+    health:
+      "unconfigured" — aucune config IMAP
+      "inactive"     — config présente mais is_active=False (arrêté par le tenant)
+      "healthy"      — dernier passage < 10 min
+      "delayed"      — dernier passage entre 10 et 20 min (1–2 cycles manqués)
+      "stale"        — dernier passage > 20 min ou jamais (cron potentiellement arrêté)
+    """
+    actor_m = _get_active_membership(request.user)
+    if not actor_m or not actor_m.tenant:
+        return Response({"detail": "No active tenant."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        cfg = MailInboxConfig.objects.get(tenant=actor_m.tenant)
+    except MailInboxConfig.DoesNotExist:
+        return Response({
+            "health": "unconfigured",
+            "health_label": "Non configuré",
+            "is_active": False,
+            "last_run": None,
+            "last_error": "",
+            "minutes_since_last_run": None,
+            "cron_interval_minutes": 5,
+        })
+
+    if not cfg.is_active:
+        return Response({
+            "health": "inactive",
+            "health_label": "Arrêté",
+            "is_active": False,
+            "last_run": cfg.last_polled_at,
+            "last_error": cfg.last_error,
+            "minutes_since_last_run": _minutes_ago(cfg.last_polled_at),
+            "cron_interval_minutes": 5,
+        })
+
+    minutes = _minutes_ago(cfg.last_polled_at)
+
+    if minutes is None:
+        health = "stale"
+        label = "En attente du premier passage"
+    elif minutes < 10:
+        health = "healthy"
+        label = f"Actif — dernier passage il y a {minutes} min"
+    elif minutes < 20:
+        health = "delayed"
+        label = f"En retard — dernier passage il y a {minutes} min"
+    else:
+        health = "stale"
+        label = f"Inactif — dernier passage il y a {minutes} min"
+
+    return Response({
+        "health": health,
+        "health_label": label,
+        "is_active": cfg.is_active,
+        "last_run": cfg.last_polled_at,
+        "last_error": cfg.last_error,
+        "minutes_since_last_run": minutes,
+        "cron_interval_minutes": 5,
+    })
+
+
+def _minutes_ago(dt) -> int | None:
+    if not dt:
+        return None
+    delta = timezone.now() - dt
+    return int(delta.total_seconds() // 60)
 
 
 # ─────────────────────────────────────────────────────────────
