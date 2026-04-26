@@ -1,7 +1,8 @@
 from rest_framework import serializers
 
 from accounts.models import Role, Membership
-from .models import Tenant
+from .models import Tenant, TenantLicense
+
 
 class TenantSerializer(serializers.ModelSerializer):
     class Meta:
@@ -21,11 +22,31 @@ class TenantSerializer(serializers.ModelSerializer):
         return value.lower() if value else value
 
 
-from rest_framework import serializers
-from .models import Tenant
-
 class TenantLiteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tenant
         fields = ["id", "name", "slug", "status"]
 
+
+class TenantLicenseSerializer(serializers.ModelSerializer):
+    is_expired     = serializers.SerializerMethodField()
+    days_remaining = serializers.SerializerMethodField()
+
+    def get_is_expired(self, obj) -> bool:
+        return obj.is_expired
+
+    def get_days_remaining(self, obj):
+        return obj.days_remaining
+
+    class Meta:
+        model = TenantLicense
+        fields = [
+            "id", "tenant", "plan", "starts_at", "expires_at",
+            "is_active", "notes",
+            "is_expired", "days_remaining",
+            "created_by", "created_at", "updated_at",
+        ]
+        read_only_fields = [
+            "id", "tenant", "is_expired", "days_remaining",
+            "created_by", "created_at", "updated_at",
+        ]

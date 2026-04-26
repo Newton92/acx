@@ -1,5 +1,7 @@
 #tenancy/models.py
 
+import datetime
+from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
 
@@ -65,5 +67,51 @@ class Tenant(models.Model):
         return self.name
 
 
+class TenantLicense(models.Model):
+    """Licence d'abonnement associée à un tenant (1-to-1)."""
 
+    class Plan(models.TextChoices):
+        ANNUAL   = "annual",   "Annuel"
+        LIFETIME = "lifetime", "À vie"
 
+    tenant = models.OneToOneField(
+        Tenant, on_delete=models.CASCADE, related_name="license"
+    )
+    plan       = models.CharField(max_length=20, choices=Plan.choices, default=Plan.ANNUAL)
+    starts_at  = models.DateField()
+    expires_at = models.DateField(null=True, blank=True)  # null = à vie
+    is_active  = models.BooleanField(default=True)
+    notes      = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="created_licenses",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # ── propriétés calculées ────────────────────────────────────────────────
+
+    @property
+    def is_expired(self) -> bool:
+        if not self.is_active:
+            return True
+        if self.plan == self.Plan.LIFETIME:
+            return False
+        if self.expires_at is None:
+            return False
+        return datetime.date.today() > self.expires_at
+
+    @property
+    def days_remaining(self) -> int | None:
+        if self.plan == self.Plan.LIFETIME or not self.expires_at:
+            return None
+        delta = (self.expires_at - datetime.date.today()).days
+        return max(0, delta)
+
+    def __str__(self):
+        end = self.expires_at.isoformat() if self.expires_at else "jamais"
+        return f"{self.tenant.name} — {self.get_plan_display()} (expire {end})"
+
+    class Meta:
+        verbose_name = "Licence tenant"
+        verbose_name_plural = "Licences tenant"
