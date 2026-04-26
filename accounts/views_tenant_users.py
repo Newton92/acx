@@ -106,26 +106,51 @@ def tenant_users(request):
 
     if not username or not email:
         return Response({"detail": "username and email are required."}, status=status.HTTP_400_BAD_REQUEST)
-    if User.objects.filter(username=username).exists():
-        return Response({"detail": "Username already exists."}, status=status.HTTP_400_BAD_REQUEST)
-    if User.objects.filter(email=email).exists():
-        return Response({"detail": "Email already exists."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Si le username existe déjà globalement, on tente de réutiliser le compte
+    # (cas d'un utilisateur retiré du tenant puis recréé).
+    existing_user = User.objects.filter(username=username).first()
+    if existing_user:
+        if Membership.objects.filter(tenant=tenant, user=existing_user).exists():
+            return Response({"detail": "Username already exists."}, status=status.HTTP_400_BAD_REQUEST)
+        # L'utilisateur existe mais n'est plus dans ce tenant : on le réadmet.
+    else:
+        if User.objects.filter(email=email).exists():
+            return Response({"detail": "Email already exists."}, status=status.HTTP_400_BAD_REQUEST)
 
     with transaction.atomic():
-        u = User(
-            username=username,
-            email=email,
-            first_name=first_name,
-            last_name=last_name,
-            telephone=telephone,
-            departement=departement,
-            is_active=True,
-        )
-        if password:
-            u.set_password(password)
+        if existing_user:
+            u = existing_user
+            u.first_name = first_name
+            u.last_name = last_name
+            if telephone is not None:
+                u.telephone = telephone
+            if departement is not None:
+                u.departement = departement
+            # Mise à jour email seulement si fourni et différent
+            if email and email != u.email:
+                if User.objects.exclude(pk=u.pk).filter(email=email).exists():
+                    return Response({"detail": "Email already exists."}, status=status.HTTP_400_BAD_REQUEST)
+                u.email = email
+            if password:
+                u.set_password(password)
+            u.is_active = True
+            u.save()
         else:
-            u.set_unusable_password()
-        u.save()
+            u = User(
+                username=username,
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                telephone=telephone,
+                departement=departement,
+                is_active=True,
+            )
+            if password:
+                u.set_password(password)
+            else:
+                u.set_unusable_password()
+            u.save()
 
         m = Membership.objects.create(
             tenant=tenant,
@@ -139,13 +164,13 @@ def tenant_users(request):
             m.roles.set(roles)
 
         AuditLog.objects.create(
-            action="TENANT_USER_CREATE",
+            action="TENANT_USER_READD" if existing_user else "TENANT_USER_CREATE",
             actor=request.user,
             tenant=tenant,
             entity_type="User",
             entity_id=u.id,
             entity_label=str(u),
-            metadata={"role_ids": role_ids},
+            metadata={"role_ids": role_ids, "readded": bool(existing_user)},
         )
 
     return Response(_user_payload(u, m), status=status.HTTP_201_CREATED)
