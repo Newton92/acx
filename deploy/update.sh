@@ -22,6 +22,16 @@ export MPLBACKEND=Agg
 python manage.py makemigrations --no-input
 python manage.py migrate --no-input
 
+echo "=== [3b/5] Seed des rôles ==="
+python manage.py shell -c "
+from accounts.models import Role
+roles = [(1,'Personnel entreprise'),(2,'Personnel ACREMAC'),(3,'Administrateur entreprise'),(4,'Administrateur'),(5,'Responsable Pays')]
+for rid, name in roles:
+    obj, created = Role.objects.get_or_create(id=rid)
+    if created: print(f'  → Rôle {rid} ({name}) créé')
+    else: print(f'  → Rôle {rid} ({name}) déjà présent')
+"
+
 echo "=== [4/5] Collectstatic ==="
 python manage.py collectstatic --no-input
 
