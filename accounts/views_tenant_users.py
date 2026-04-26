@@ -1,3 +1,5 @@
+import re
+
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from rest_framework.decorators import api_view, permission_classes
@@ -6,6 +8,8 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from accounts.models import Membership, Role, AuditLog
+
+_USERNAME_RE = re.compile(r'^[\w.@+\-]+$')
 
 User = get_user_model()
 
@@ -160,7 +164,27 @@ def tenant_user_update(request, user_id: int):
     u = target_m.user
     payload = request.data or {}
 
-    # on autorise l'update de ces champs
+    # ── Username — unicité globale + format ───────────────────────────
+    new_username = (payload.get("username") or "").strip()
+    if new_username and new_username != u.username:
+        if not _USERNAME_RE.match(new_username):
+            return Response(
+                {"field": "username", "detail": "Caractères autorisés : lettres, chiffres, @, ., +, -, _"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(new_username) > 150:
+            return Response(
+                {"field": "username", "detail": "150 caractères maximum."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if User.objects.exclude(pk=u.pk).filter(username__iexact=new_username).exists():
+            return Response(
+                {"field": "username", "detail": "Ce nom d'utilisateur est déjà utilisé par un autre compte."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        u.username = new_username
+
+    # ── Champs profil ─────────────────────────────────────────────────
     for field in ["first_name", "last_name", "telephone", "departement"]:
         if field in payload:
             setattr(u, field, payload.get(field) or "")
@@ -172,6 +196,11 @@ def tenant_user_update(request, user_id: int):
         if User.objects.exclude(id=u.id).filter(email=email).exists():
             return Response({"detail": "Email already exists."}, status=status.HTTP_400_BAD_REQUEST)
         u.email = email
+
+    # ── Mot de passe ──────────────────────────────────────────────────
+    new_password = (payload.get("password") or "").strip()
+    if new_password:
+        u.set_password(new_password)
 
     u.save()
 
