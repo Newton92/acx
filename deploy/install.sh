@@ -86,8 +86,24 @@ sed "s|/var/www/acx|$APP_DIR|g" "$APP_DIR/deploy/apache-acx.conf" \
 a2ensite acx
 systemctl reload apache2
 
+echo "=== Installation du cron job poll_mail (toutes les 5 min) ==="
+mkdir -p /var/log/acx
+
+# Fichier de cron dédié dans /etc/cron.d/
+cat > /etc/cron.d/acx-poll-mail << EOF
+# ACX — Polling IMAP des boîtes mail des tenants (toutes les 5 minutes)
+DJANGO_SETTINGS_MODULE=acx.settings_prod
+MPLBACKEND=Agg
+
+*/5 * * * * www-data $APP_DIR/venv/bin/python $APP_DIR/manage.py poll_mail >> /var/log/acx/poll-mail.log 2>&1
+EOF
+
+chmod 644 /etc/cron.d/acx-poll-mail
+echo "  → Cron installé : /etc/cron.d/acx-poll-mail (toutes les 5 min, logs : /var/log/acx/poll-mail.log)"
+
 echo ""
 echo "✅ PEL, to installation terminée hein !"
 echo ""
 echo "Prochaines étapes :"
 echo "  1. Vérifier : sudo systemctl status acx-gunicorn"
+echo "  2. Logs poll_mail : tail -f /var/log/acx/poll-mail.log"

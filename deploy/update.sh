@@ -28,5 +28,22 @@ python manage.py collectstatic --no-input
 echo "=== [5/5] Redémarrage Gunicorn ==="
 systemctl restart acx-gunicorn
 
+echo "=== Vérification du cron job poll_mail ==="
+if [ ! -f /etc/cron.d/acx-poll-mail ]; then
+    echo "  → Cron manquant, recréation…"
+    mkdir -p /var/log/acx
+    cat > /etc/cron.d/acx-poll-mail << EOF
+# ACX — Polling IMAP des boîtes mail des tenants (toutes les 5 minutes)
+DJANGO_SETTINGS_MODULE=acx.settings_prod
+MPLBACKEND=Agg
+
+*/5 * * * * www-data $APP_DIR/venv/bin/python $APP_DIR/manage.py poll_mail >> /var/log/acx/poll-mail.log 2>&1
+EOF
+    chmod 644 /etc/cron.d/acx-poll-mail
+    echo "  → Cron recréé : /etc/cron.d/acx-poll-mail"
+else
+    echo "  → Cron déjà présent : /etc/cron.d/acx-poll-mail"
+fi
+
 echo "✅ Pel, ta mise à jour terminée hein!"
 systemctl status acx-gunicorn --no-pager
