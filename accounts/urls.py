@@ -19,6 +19,10 @@ from .views_mail_config import (
     mail_dispatch, mail_reject, mail_restore, mail_mark_processed,
     mail_country_managers,
 )
+from .views_countries import (
+    tenant_countries, tenant_country_detail, tenant_country_set_manager,
+    user_country_list, user_country_save, user_country_assign_all,
+)
 
 
 from cases.views_customer_portal import (
@@ -193,6 +197,16 @@ urlpatterns = [
     path("tenant/mail/inbox/<int:mail_id>/restore/", mail_restore, name="tenant-mail-restore"),
     path("tenant/mail/inbox/<int:mail_id>/processed/", mail_mark_processed, name="tenant-mail-processed"),
 
-    # Responsables pays
+    # Responsables pays (mail)
     path("tenant/mail/country-managers/", mail_country_managers, name="tenant-mail-country-managers"),
+
+    # Périmètre géographique — pays du tenant
+    path("tenant/countries/", tenant_countries, name="tenant-countries"),
+    path("tenant/countries/<int:country_id>/", tenant_country_detail, name="tenant-country-detail"),
+    path("tenant/countries/<int:country_id>/set-manager/", tenant_country_set_manager, name="tenant-country-set-manager"),
+
+    # Pays assignés à un utilisateur
+    path("tenant/users/<int:user_id>/countries/", user_country_list, name="user-country-list"),
+    path("tenant/users/<int:user_id>/countries/save/", user_country_save, name="user-country-save"),
+    path("tenant/users/<int:user_id>/countries/assign-all/", user_country_assign_all, name="user-country-assign-all"),
 ]

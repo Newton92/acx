@@ -371,3 +371,53 @@ class MailAttachment(models.Model):
 
     def __str__(self):
         return f"{self.filename} ({self.mail_id})"
+
+
+# ---------------------------------------------------------------------------
+# Périmètre géographique — pays opérationnels du tenant
+# ---------------------------------------------------------------------------
+
+class TenantCountry(models.Model):
+    """Pays dans lequel un tenant opère (son périmètre géographique)."""
+
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.CASCADE, related_name="countries"
+    )
+    country_code = models.CharField(max_length=2)   # ISO 3166-1 alpha-2
+    country_name = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=True)
+    manager = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="managed_countries",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("tenant", "country_code")]
+        ordering = ["country_name"]
+
+    def __str__(self):
+        return f"{self.country_name} ({self.country_code}) — {self.tenant}"
+
+
+class UserCountryAssignment(models.Model):
+    """Affectation d'un utilisateur à un ou plusieurs pays d'un tenant."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE, related_name="country_assignments"
+    )
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.CASCADE, related_name="user_country_assignments"
+    )
+    country = models.ForeignKey(
+        TenantCountry, on_delete=models.CASCADE, related_name="user_assignments"
+    )
+
+    class Meta:
+        unique_together = [("user", "tenant", "country")]
+
+    def __str__(self):
+        return f"{self.user} → {self.country}"
