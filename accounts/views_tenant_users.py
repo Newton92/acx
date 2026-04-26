@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
-from accounts.models import Membership, Role, AuditLog
+from accounts.models import Membership, Role, AuditLog, UserCountryAssignment
 
 _USERNAME_RE = re.compile(r'^[\w.@+\-]+$')
 
@@ -81,6 +81,13 @@ def tenant_users(request):
             .prefetch_related("roles")
             .order_by("user__username")
         )
+        country_code = request.query_params.get("country", "").strip().upper()
+        if country_code:
+            assigned_user_ids = UserCountryAssignment.objects.filter(
+                tenant=tenant,
+                country__country_code__iexact=country_code,
+            ).values_list("user_id", flat=True)
+            memberships = memberships.filter(user_id__in=assigned_user_ids)
         return Response([_user_payload(m.user, m) for m in memberships])
 
     # POST
