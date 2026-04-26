@@ -80,6 +80,9 @@ class PortfolioSerializer(serializers.ModelSerializer):
     cases_count = serializers.IntegerField(read_only=True)
     open_cases_count = serializers.IntegerField(read_only=True)
     overdue_cases_count = serializers.IntegerField(read_only=True)
+    balance_total = serializers.DecimalField(
+        max_digits=18, decimal_places=2, read_only=True, allow_null=True
+    )
 
     class Meta:
         model = Portfolio
@@ -103,6 +106,7 @@ class PortfolioSerializer(serializers.ModelSerializer):
             "cases_count",
             "open_cases_count",
             "overdue_cases_count",
+            "balance_total",
         ]
         read_only_fields = [
             "id",
@@ -114,6 +118,7 @@ class PortfolioSerializer(serializers.ModelSerializer):
             "cases_count",
             "open_cases_count",
             "overdue_cases_count",
+            "balance_total",
         ]
 
     def validate_name(self, value: str):

@@ -1,7 +1,7 @@
 # cases/views.py
 from django.db import transaction
 from django.db.models import Q
-from django.db.models import Count, Q, F
+from django.db.models import Count, Q, F, Sum
 from django.utils import timezone
 
 from rest_framework import viewsets, status
@@ -66,6 +66,10 @@ class PortfolioViewSet(TenantScopedViewSet):
                     "cases",
                     filter=Q(cases__due_date__lt=today) & ~Q(cases__status="closed"),
                     distinct=True,
+                ),
+                balance_total=Sum(
+                    "cases__balance_amount",
+                    filter=~Q(cases__status="closed"),
                 ),
             )
         )
