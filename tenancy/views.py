@@ -130,49 +130,58 @@ class TenantExportView(APIView):
         return out.getvalue()
 
     def _export_cases(self, tenant) -> str:
-        from cases.models import Case
-        qs = Case.objects.filter(tenant=tenant).select_related("debtor", "portfolio", "assigned_to")
-        headers = ["id", "reference", "title", "status", "priority", "currency",
-                   "original_amount", "balance_amount", "due_date",
-                   "debtor", "portfolio", "assigned_to", "created_at"]
-        rows = [
-            [c.id, c.reference, c.title, c.status, c.priority, c.currency,
-             c.original_amount, c.balance_amount, c.due_date or "",
-             str(c.debtor) if c.debtor else "",
-             c.portfolio.name if c.portfolio else "",
-             c.assigned_to.username if c.assigned_to else "",
-             c.created_at.isoformat()]
-            for c in qs
-        ]
-        return self._csv(headers, rows)
+        try:
+            from cases.models import Case
+            qs = Case.objects.filter(tenant=tenant).select_related("debtor", "portfolio", "assigned_to")
+            headers = ["id", "reference", "title", "status", "priority", "currency",
+                       "original_amount", "balance_amount", "due_date",
+                       "debtor", "portfolio", "assigned_to", "opened_at"]
+            rows = [
+                [c.id, c.reference, c.title, c.status, c.priority, c.currency or "",
+                 c.original_amount, c.balance_amount, c.due_date or "",
+                 str(c.debtor) if c.debtor else "",
+                 c.portfolio.name if c.portfolio else "",
+                 c.assigned_to.username if c.assigned_to else "",
+                 c.opened_at.isoformat()]
+                for c in qs
+            ]
+            return self._csv(headers, rows)
+        except Exception:
+            return self._csv(["error"], [["cases export unavailable"]])
 
     def _export_debtors(self, tenant) -> str:
-        from cases.models import Debtor
-        qs = Debtor.objects.filter(tenant=tenant)
-        headers = ["id", "full_name", "email", "phone", "address", "city", "country", "created_at"]
-        rows = [
-            [d.id, getattr(d, "full_name", str(d)),
-             getattr(d, "email", ""), getattr(d, "phone", ""),
-             getattr(d, "address", ""), getattr(d, "city", ""),
-             getattr(d, "country", ""), d.created_at.isoformat()]
-            for d in qs
-        ]
-        return self._csv(headers, rows)
+        try:
+            from cases.models import Debtor
+            qs = Debtor.objects.filter(tenant=tenant)
+            headers = ["id", "full_name", "email", "phone", "address", "city", "country", "created_at"]
+            rows = [
+                [d.id, getattr(d, "full_name", str(d)),
+                 getattr(d, "email", "") or "", getattr(d, "phone", "") or "",
+                 getattr(d, "address", "") or "", getattr(d, "city", "") or "",
+                 getattr(d, "country", "") or "", d.created_at.isoformat()]
+                for d in qs
+            ]
+            return self._csv(headers, rows)
+        except Exception:
+            return self._csv(["error"], [["debtors export unavailable"]])
 
     def _export_portfolios(self, tenant) -> str:
-        from cases.models import Portfolio
-        qs = Portfolio.objects.filter(tenant=tenant).select_related("owner")
-        headers = ["id", "name", "code", "category", "priority", "default_currency",
-                   "is_active", "owner", "created_at"]
-        rows = [
-            [p.id, p.name, p.code or "", p.category or "", p.priority,
-             p.default_currency or "",
-             p.is_active,
-             p.owner.username if p.owner else "",
-             p.created_at.isoformat()]
-            for p in qs
-        ]
-        return self._csv(headers, rows)
+        try:
+            from cases.models import Portfolio
+            qs = Portfolio.objects.filter(tenant=tenant).select_related("owner")
+            headers = ["id", "name", "code", "category", "priority", "default_currency",
+                       "is_active", "owner", "created_at"]
+            rows = [
+                [p.id, p.name, p.code or "", p.category or "", p.priority,
+                 p.default_currency or "",
+                 p.is_active,
+                 p.owner.username if p.owner else "",
+                 p.created_at.isoformat()]
+                for p in qs
+            ]
+            return self._csv(headers, rows)
+        except Exception:
+            return self._csv(["error"], [["portfolios export unavailable"]])
 
     def _export_customers(self, tenant) -> str:
         try:
@@ -248,15 +257,18 @@ class TenantExportView(APIView):
             return self._csv(["error"], [["treasury export unavailable"]])
 
     def _export_users(self, tenant) -> str:
-        from accounts.models import Membership
-        qs = Membership.objects.filter(tenant=tenant).select_related("user").prefetch_related("roles")
-        headers = ["user_id", "username", "email", "first_name", "last_name",
-                   "is_active", "membership_status", "is_owner", "roles"]
-        rows = [
-            [m.user.id, m.user.username, m.user.email,
-             m.user.first_name, m.user.last_name, m.user.is_active,
-             m.status, m.is_owner,
-             "|".join(str(r.id) for r in m.roles.all())]
-            for m in qs
-        ]
-        return self._csv(headers, rows)
+        try:
+            from accounts.models import Membership
+            qs = Membership.objects.filter(tenant=tenant).select_related("user").prefetch_related("roles")
+            headers = ["user_id", "username", "email", "first_name", "last_name",
+                       "is_active", "membership_status", "is_owner", "roles"]
+            rows = [
+                [m.user.id, m.user.username, m.user.email,
+                 m.user.first_name, m.user.last_name, m.user.is_active,
+                 m.status, m.is_owner,
+                 "|".join(str(r.id) for r in m.roles.all())]
+                for m in qs
+            ]
+            return self._csv(headers, rows)
+        except Exception:
+            return self._csv(["error"], [["users export unavailable"]])
