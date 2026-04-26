@@ -155,6 +155,10 @@ class DebtorViewSet(TenantScopedViewSet):
         if q:
             qs = qs.filter(full_name__icontains=q)
 
+        country_code = self.request.query_params.get("country")
+        if country_code:
+            qs = qs.filter(country__iexact=country_code.strip())
+
         return qs.order_by("full_name")
 
     def perform_create(self, serializer):
@@ -220,10 +224,15 @@ class CaseViewSet(TenantScopedViewSet):
         if assigned_to:
             qs = qs.filter(assigned_to_id=assigned_to)
 
-        # ✅ filtre portefeuille
+        # filtre portefeuille
         portfolio_id = self.request.query_params.get("portfolio")
         if portfolio_id:
             qs = qs.filter(portfolio_id=portfolio_id)
+
+        # filtre pays (par pays du débiteur)
+        country_code = self.request.query_params.get("country")
+        if country_code:
+            qs = qs.filter(debtor__country__iexact=country_code.strip())
 
         # ✅ recherche propre (sans casser tenant filter)
         q = (self.request.query_params.get("q") or "").strip()

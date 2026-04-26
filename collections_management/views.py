@@ -129,7 +129,11 @@ class CollectionCaseViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = CollectionCase.objects.all()
 
     def get_queryset(self):
-        return self.filter_by_tenant(CollectionCase.objects.all())
+        qs = self.filter_by_tenant(CollectionCase.objects.all())
+        country_code = self.request.query_params.get("country")
+        if country_code:
+            qs = qs.filter(debtor__country__iexact=country_code.strip())
+        return qs
 
     def create(self, request, *args, **kwargs):
         """
