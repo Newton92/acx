@@ -528,10 +528,6 @@ def mail_dispatch(request, mail_id: int):
     except Membership.DoesNotExist:
         return Response({"detail": "Responsable introuvable dans ce tenant."}, status=404)
 
-    role_ids = set(assignee_m.roles.values_list("id", flat=True))
-    if Role.COUNTRY_MANAGER not in role_ids and not assignee_m.is_owner:
-        return Response({"detail": "Cet utilisateur n'est pas Responsable Pays."}, status=400)
-
     mail.assigned_to = assignee_m.user
     mail.assigned_country = assigned_country
     mail.dispatch_note = dispatch_note
