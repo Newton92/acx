@@ -19,6 +19,7 @@ Routes:
 
 import imaplib
 import socket
+import threading
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -536,8 +537,10 @@ def mail_dispatch(request, mail_id: int):
     mail.status = IncomingMail.Status.DISPATCHED
     mail.save()
 
-    # Notifier le responsable pays
-    _notify_dispatch(mail, assignee_m.user)
+    # Notifier en arrière-plan pour ne pas bloquer la réponse HTTP
+    threading.Thread(
+        target=_notify_dispatch, args=(mail, assignee_m.user), daemon=True
+    ).start()
 
     return Response(_mail_detail_payload(mail))
 
