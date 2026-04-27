@@ -433,11 +433,20 @@ def mail_inbox(request):
     if not actor_m or not actor_m.tenant:
         return Response({"detail": "No active tenant."}, status=status.HTTP_403_FORBIDDEN)
 
-    qs = (
-        IncomingMail.objects.filter(tenant=actor_m.tenant)
-        .select_related("mail_source", "assigned_to", "dispatched_by")
-        .prefetch_related("attachments")
-    )
+    is_admin = _is_tenant_admin(actor_m)
+
+    base_qs = IncomingMail.objects.filter(tenant=actor_m.tenant)
+
+    if is_admin:
+        # Admins voient tous les mails du tenant
+        qs = base_qs.select_related("mail_source", "assigned_to", "dispatched_by").prefetch_related("attachments")
+    else:
+        # Non-admins : uniquement les mails qui leur sont assignés
+        qs = (
+            base_qs.filter(assigned_to=request.user)
+            .select_related("mail_source", "assigned_to", "dispatched_by")
+            .prefetch_related("attachments")
+        )
 
     status_filter = request.GET.get("status")
     if status_filter:
@@ -457,20 +466,31 @@ def mail_inbox(request):
     page = max(1, int(request.GET.get("page", 1)))
     page_size = 20
     total = qs.count()
-    mails = qs[(page - 1) * page_size: page * page_size]
+    mails = qs.order_by("-received_at")[(page - 1) * page_size: page * page_size]
 
-    stats = {
-        "total": IncomingMail.objects.filter(tenant=actor_m.tenant).count(),
-        "pending": IncomingMail.objects.filter(tenant=actor_m.tenant, status="pending").count(),
-        "dispatched": IncomingMail.objects.filter(tenant=actor_m.tenant, status="dispatched").count(),
-        "processed": IncomingMail.objects.filter(tenant=actor_m.tenant, status="processed").count(),
-        "rejected": IncomingMail.objects.filter(tenant=actor_m.tenant, status="rejected").count(),
-    }
+    if is_admin:
+        stats = {
+            "total":      base_qs.count(),
+            "pending":    base_qs.filter(status="pending").count(),
+            "dispatched": base_qs.filter(status="dispatched").count(),
+            "processed":  base_qs.filter(status="processed").count(),
+            "rejected":   base_qs.filter(status="rejected").count(),
+        }
+    else:
+        my_qs = base_qs.filter(assigned_to=request.user)
+        stats = {
+            "total":      my_qs.count(),
+            "pending":    my_qs.filter(status="pending").count(),
+            "dispatched": my_qs.filter(status="dispatched").count(),
+            "processed":  my_qs.filter(status="processed").count(),
+            "rejected":   my_qs.filter(status="rejected").count(),
+        }
 
     return Response({
         "count": total,
         "page": page,
         "page_size": page_size,
+        "is_admin": is_admin,
         "results": [_mail_list_payload(m) for m in mails],
         "stats": stats,
     })
