@@ -136,12 +136,13 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # ── Email ──────────────────────────────────────────────────────────────────────
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = env("EMAIL_HOST", default="localhost")
+# InsecureEmailBackend: désactive la vérification du cert TLS (serveur sur IP)
+EMAIL_BACKEND = "core.email_backend.InsecureEmailBackend"
+EMAIL_HOST = env("EMAIL_HOST", default="3.236.213.114")
 EMAIL_PORT = env.int("EMAIL_PORT", default=587)
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
 EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=False)
-EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="acx@acremac.com")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="acx@acremac.com")
 SERVER_EMAIL = DEFAULT_FROM_EMAIL

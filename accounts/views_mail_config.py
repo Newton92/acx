@@ -18,11 +18,14 @@ Routes:
 """
 
 import imaplib
+import logging
 import socket
 import threading
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -673,21 +676,34 @@ def _notify_dispatch(mail: IncomingMail, assignee):
     from django.conf import settings as dj_settings
 
     if not assignee.email:
+        logger.warning("_notify_dispatch: assignee %s has no email, skipping.", assignee.username)
         return
+
+    subject = f"[ACX] Demande client assignée — {mail.subject[:80]}"
+    body = (
+        f"Bonjour {assignee.first_name or assignee.username},\n\n"
+        f"Un mail client vous a été assigné.\n\n"
+        f"De : {mail.from_email}\n"
+        f"Objet : {mail.subject}\n"
+        f"Pays : {mail.assigned_country or '—'}\n"
+        f"{('Note : ' + mail.dispatch_note + chr(10)) if mail.dispatch_note else ''}\n"
+        f"Connectez-vous à la plateforme ACX pour le traiter."
+    )
+
+    logger.info(
+        "_notify_dispatch: sending to %s via %s:%s",
+        assignee.email,
+        dj_settings.EMAIL_HOST,
+        dj_settings.EMAIL_PORT,
+    )
     try:
         send_mail(
-            subject=f"[ACX] Demande client assignée — {mail.subject[:80]}",
-            message=(
-                f"Bonjour {assignee.first_name or assignee.username},\n\n"
-                f"Un mail client vous a été assigné.\n\n"
-                f"De : {mail.from_email}\n"
-                f"Objet : {mail.subject}\n"
-                f"Pays : {mail.assigned_country or '—'}\n\n"
-                f"Connectez-vous à la plateforme ACX pour le traiter."
-            ),
+            subject=subject,
+            message=body,
             from_email=dj_settings.DEFAULT_FROM_EMAIL,
             recipient_list=[assignee.email],
-            fail_silently=True,
+            fail_silently=False,
         )
-    except Exception:
-        pass
+        logger.info("_notify_dispatch: email sent successfully to %s", assignee.email)
+    except Exception as exc:
+        logger.error("_notify_dispatch: failed to send email to %s — %s", assignee.email, exc)
