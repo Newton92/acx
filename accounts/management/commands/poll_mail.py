@@ -99,7 +99,7 @@ class Command(BaseCommand):
             self.stdout.write(f"  Sources actives ({len(sources)}) : " +
                               (", ".join(s.email_or_domain for s in sources) or "(aucune)"))
 
-        # Lister les dossiers disponibles sur le serveur
+        # Lister tous les dossiers disponibles sur le serveur
         _, folder_list = imap.list()
         available_folders = []
         for f in folder_list:
@@ -109,10 +109,13 @@ class Command(BaseCommand):
                 if folder_name:
                     available_folders.append(folder_name)
 
-        # Dossiers à scanner : boîte principale + spams détectés
+        if self.verbose:
+            self.stdout.write(f"  Dossiers IMAP disponibles : {', '.join(available_folders) or '(aucun)'}")
+
+        # Dossiers à scanner : boîte principale + tous les spams détectés
         folders_to_scan = [cfg.mailbox]
         for spam_folder in self.SPAM_FOLDERS:
-            if spam_folder in available_folders:
+            if spam_folder in available_folders and spam_folder != cfg.mailbox:
                 folders_to_scan.append(spam_folder)
 
         new_count = 0
