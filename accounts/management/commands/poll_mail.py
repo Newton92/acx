@@ -39,8 +39,13 @@ class Command(BaseCommand):
             help="Limiter le poll à un seul tenant (par ID).",
         )
 
+    def add_arguments(self, parser):
+        parser.add_argument("--tenant-id", type=int, default=None)
+        parser.add_argument("--verbose", action="store_true", help="Affiche le détail de chaque email traité")
+
     def handle(self, *args, **options):
         tenant_id = options.get("tenant_id")
+        self.verbose = options.get("verbose", False)
         qs = MailInboxConfig.objects.filter(is_active=True).select_related("tenant")
         if tenant_id:
             qs = qs.filter(tenant_id=tenant_id)
@@ -77,18 +82,25 @@ class Command(BaseCommand):
         _, data = imap.search(None, "UNSEEN")
         uid_list = [u for u in data[0].split() if u]
 
+        self.stdout.write(f"  {len(uid_list)} message(s) non lu(s) trouvé(s).")
+
         sources = list(
             MailSource.objects.filter(tenant=cfg.tenant, is_active=True)
         )
+        if self.verbose:
+            self.stdout.write(f"  Sources actives ({len(sources)}) : " +
+                              ", ".join(s.email_or_domain for s in sources) or "(aucune)")
 
         new_count = 0
         for uid in uid_list:
             try:
-                created = self._process_uid(imap, uid, cfg.tenant, sources)
+                created, reason = self._process_uid(imap, uid, cfg.tenant, sources)
                 if created:
                     new_count += 1
-                # Marquer comme lu dans la boîte source
-                imap.store(uid, "+FLAGS", "\\Seen")
+                    # Marquer comme lu seulement les mails interceptés
+                    imap.store(uid, "+FLAGS", "\\Seen")
+                elif self.verbose:
+                    self.stdout.write(f"    UID {uid.decode()} ignoré — {reason}")
             except Exception as exc:
                 self.stderr.write(f"    UID {uid} — erreur : {exc}")
 
@@ -101,7 +113,7 @@ class Command(BaseCommand):
 
         return new_count
 
-    def _process_uid(self, imap, uid, tenant, sources) -> bool:
+    def _process_uid(self, imap, uid, tenant, sources):
         _, msg_data = imap.fetch(uid, "(RFC822)")
         raw = msg_data[0][1]
         msg = email.message_from_bytes(raw)
@@ -112,7 +124,7 @@ class Command(BaseCommand):
             message_id = "no-id-" + hashlib.md5(raw[:512]).hexdigest()
 
         if IncomingMail.objects.filter(message_id=message_id).exists():
-            return False
+            return False, "doublon (message_id déjà enregistré)"
 
         # Expéditeur
         from_header = msg.get("From", "")
@@ -120,12 +132,12 @@ class Command(BaseCommand):
         from_name = self._decode_header(from_name_raw)
         from_email = from_email_raw.lower().strip()
         if not from_email:
-            return False
+            return False, "aucun expéditeur détectable"
 
         # Filtrer par source configurée
         matched_source = self._match_source(from_email, sources)
         if not matched_source:
-            return False
+            return False, f"expéditeur '{from_email}' ne correspond à aucune source active"
 
         # Objet
         subject = self._decode_header(msg.get("Subject", ""))
@@ -158,11 +170,16 @@ class Command(BaseCommand):
         # Pièces jointes
         self._save_attachments(msg, incoming)
 
+        if self.verbose:
+            self.stdout.write(self.style.SUCCESS(
+                f"    ✓ Intercepté : {from_email} — « {subject[:60]} »"
+            ))
+
         # Notifications
         self._notify_tenant_owner(tenant, incoming)
         self._notify_superadmin(incoming)
 
-        return True
+        return True, "ok"
 
     # ─────────────────────────────────────────────────────────
     # Matching source
