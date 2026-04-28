@@ -42,10 +42,12 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--tenant-id", type=int, default=None)
         parser.add_argument("--verbose", action="store_true", help="Affiche le détail de chaque email traité")
+        parser.add_argument("--days", type=int, default=None, help="Forcer la fenêtre de recherche en jours (ex: --days 30)")
 
     def handle(self, *args, **options):
         tenant_id = options.get("tenant_id")
         self.verbose = options.get("verbose", False)
+        self.force_days = options.get("days")
         qs = MailInboxConfig.objects.filter(is_active=True).select_related("tenant")
         if tenant_id:
             qs = qs.filter(tenant_id=tenant_id)
@@ -79,9 +81,11 @@ class Command(BaseCommand):
         imap.login(cfg.imap_user, cfg.imap_password)
         imap.select(cfg.mailbox)
 
-        # Recherche par date : depuis le dernier poll (- 1 jour de marge) ou 30 jours max.
-        # On ne dépend plus du flag UNSEEN — la déduplication par message_id évite les doublons.
-        if cfg.last_polled_at:
+        # Recherche par date — la déduplication par message_id évite les doublons.
+        # Priorité : --days > last_polled_at - 1j > 30 jours par défaut.
+        if self.force_days:
+            since_dt = timezone.now() - timedelta(days=self.force_days)
+        elif cfg.last_polled_at:
             since_dt = cfg.last_polled_at - timedelta(days=1)
         else:
             since_dt = timezone.now() - timedelta(days=30)
