@@ -17,7 +17,7 @@ from .views_mail_config import (
     mail_sources, mail_source_detail, mail_source_toggle,
     mail_inbox, mail_inbox_detail,
     mail_dispatch, mail_reject, mail_restore, mail_mark_processed,
-    mail_country_managers,
+    mail_country_managers, mail_attachment_download,
 )
 from .views_countries import (
     tenant_countries, tenant_country_detail, tenant_country_set_manager,
@@ -199,6 +199,9 @@ urlpatterns = [
 
     # Responsables pays (mail)
     path("tenant/mail/country-managers/", mail_country_managers, name="tenant-mail-country-managers"),
+
+    # Téléchargement sécurisé des pièces jointes
+    path("tenant/mail/attachments/<int:attachment_id>/download/", mail_attachment_download, name="tenant-mail-attachment-download"),
 
     # Périmètre géographique — pays du tenant
     path("tenant/countries/", tenant_countries, name="tenant-countries"),

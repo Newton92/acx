@@ -19,10 +19,13 @@ Routes:
 
 import imaplib
 import logging
+import mimetypes
+import os
 import socket
 import threading
 
 from django.contrib.auth import get_user_model
+from django.http import FileResponse, Http404
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -131,6 +134,7 @@ def _mail_detail_payload(mail):
                 "content_type": a.content_type,
                 "size": a.size,
                 "url": a.file.url if a.file else None,
+                "download_url": f"/api/tenant/mail/attachments/{a.id}/download/",
             }
             for a in mail.attachments.all()
         ],
@@ -707,3 +711,43 @@ def _notify_dispatch(mail: IncomingMail, assignee):
         logger.info("_notify_dispatch: email sent successfully to %s", assignee.email)
     except Exception as exc:
         logger.error("_notify_dispatch: failed to send email to %s — %s", assignee.email, exc)
+
+
+# ─── Téléchargement sécurisé des pièces jointes ───────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def mail_attachment_download(request, attachment_id):
+    """
+    Sert la pièce jointe uniquement si l'utilisateur appartient au même tenant
+    que le mail auquel elle est rattachée.
+    """
+    actor_m = Membership.objects.filter(
+        user=request.user, status=Membership.Status.ACTIVE
+    ).select_related("tenant").first()
+    if not actor_m:
+        return Response({"detail": "Accès refusé."}, status=403)
+
+    try:
+        att = MailAttachment.objects.select_related("mail__tenant").get(id=attachment_id)
+    except MailAttachment.DoesNotExist:
+        raise Http404
+
+    if att.mail.tenant_id != actor_m.tenant_id:
+        return Response({"detail": "Accès refusé."}, status=403)
+
+    if not att.file or not att.file.name:
+        return Response({"detail": "Fichier introuvable."}, status=404)
+
+    try:
+        file_handle = att.file.open("rb")
+    except (FileNotFoundError, OSError):
+        return Response({"detail": "Fichier introuvable sur le serveur."}, status=404)
+
+    content_type, _ = mimetypes.guess_type(att.filename or att.file.name)
+    content_type = content_type or "application/octet-stream"
+
+    response = FileResponse(file_handle, content_type=content_type)
+    filename = (att.filename or os.path.basename(att.file.name)).replace('"', "")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
