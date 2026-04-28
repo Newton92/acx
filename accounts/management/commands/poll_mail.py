@@ -12,7 +12,7 @@ import email.utils
 import hashlib
 import imaplib
 import socket
-from datetime import datetime, timezone as dt_tz
+from datetime import datetime, timezone as dt_tz, timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -79,10 +79,17 @@ class Command(BaseCommand):
         imap.login(cfg.imap_user, cfg.imap_password)
         imap.select(cfg.mailbox)
 
-        _, data = imap.search(None, "UNSEEN")
+        # Recherche par date : depuis le dernier poll (- 1 jour de marge) ou 30 jours max.
+        # On ne dépend plus du flag UNSEEN — la déduplication par message_id évite les doublons.
+        if cfg.last_polled_at:
+            since_dt = cfg.last_polled_at - timedelta(days=1)
+        else:
+            since_dt = timezone.now() - timedelta(days=30)
+        since_str = since_dt.strftime("%d-%b-%Y")
+        _, data = imap.search(None, f'SINCE "{since_str}"')
         uid_list = [u for u in data[0].split() if u]
 
-        self.stdout.write(f"  {len(uid_list)} message(s) non lu(s) trouvé(s).")
+        self.stdout.write(f"  {len(uid_list)} message(s) trouvé(s) depuis le {since_str}.")
 
         sources = list(
             MailSource.objects.filter(tenant=cfg.tenant, is_active=True)
@@ -97,8 +104,6 @@ class Command(BaseCommand):
                 created, reason = self._process_uid(imap, uid, cfg.tenant, sources)
                 if created:
                     new_count += 1
-                    # Marquer comme lu seulement les mails interceptés
-                    imap.store(uid, "+FLAGS", "\\Seen")
                 elif self.verbose:
                     self.stdout.write(f"    UID {uid.decode()} ignoré — {reason}")
             except Exception as exc:
