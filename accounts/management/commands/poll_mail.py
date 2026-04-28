@@ -72,6 +72,10 @@ class Command(BaseCommand):
     # Cœur du polling
     # ─────────────────────────────────────────────────────────
 
+    # Dossiers spam à vérifier en plus de la boîte principale
+    SPAM_FOLDERS = ["Spam", "Junk", "SPAM", "JUNK", "Junk Email", "Junk Mail",
+                    "[Gmail]/Spam", "INBOX.Spam", "INBOX.Junk", "Bulk Mail"]
+
     def _poll_tenant(self, cfg: MailInboxConfig) -> int:
         if cfg.use_ssl:
             imap = imaplib.IMAP4_SSL(cfg.imap_host, cfg.imap_port)
@@ -79,7 +83,6 @@ class Command(BaseCommand):
             imap = imaplib.IMAP4(cfg.imap_host, cfg.imap_port)
 
         imap.login(cfg.imap_user, cfg.imap_password)
-        imap.select(cfg.mailbox)
 
         # Recherche par date — la déduplication par message_id évite les doublons.
         # Priorité : --days > last_polled_at - 1j > 30 jours par défaut.
@@ -90,30 +93,54 @@ class Command(BaseCommand):
         else:
             since_dt = timezone.now() - timedelta(days=30)
         since_str = since_dt.strftime("%d-%b-%Y")
-        _, data = imap.search(None, f'SINCE "{since_str}"')
-        uid_list = [u for u in data[0].split() if u]
 
-        self.stdout.write(f"  {len(uid_list)} message(s) trouvé(s) depuis le {since_str}.")
-
-        sources = list(
-            MailSource.objects.filter(tenant=cfg.tenant, is_active=True)
-        )
+        sources = list(MailSource.objects.filter(tenant=cfg.tenant, is_active=True))
         if self.verbose:
             self.stdout.write(f"  Sources actives ({len(sources)}) : " +
-                              ", ".join(s.email_or_domain for s in sources) or "(aucune)")
+                              (", ".join(s.email_or_domain for s in sources) or "(aucune)"))
+
+        # Lister les dossiers disponibles sur le serveur
+        _, folder_list = imap.list()
+        available_folders = []
+        for f in folder_list:
+            if isinstance(f, bytes):
+                parts = f.decode().split('"')
+                folder_name = parts[-1].strip().strip('"').strip()
+                if folder_name:
+                    available_folders.append(folder_name)
+
+        # Dossiers à scanner : boîte principale + spams détectés
+        folders_to_scan = [cfg.mailbox]
+        for spam_folder in self.SPAM_FOLDERS:
+            if spam_folder in available_folders:
+                folders_to_scan.append(spam_folder)
 
         new_count = 0
-        for uid in uid_list:
+        for folder in folders_to_scan:
             try:
-                created, reason = self._process_uid(imap, uid, cfg.tenant, sources)
-                if created:
-                    new_count += 1
+                status, _ = imap.select(folder)
+                if status != "OK":
+                    continue
+                _, data = imap.search(None, f'SINCE "{since_str}"')
+                uid_list = [u for u in data[0].split() if u]
+                if uid_list:
+                    self.stdout.write(f"  [{folder}] {len(uid_list)} message(s) depuis le {since_str}.")
                 elif self.verbose:
-                    self.stdout.write(f"    UID {uid.decode()} ignoré — {reason}")
-            except Exception as exc:
-                self.stderr.write(f"    UID {uid} — erreur : {exc}")
+                    self.stdout.write(f"  [{folder}] 0 message.")
 
-        imap.close()
+                for uid in uid_list:
+                    try:
+                        created, reason = self._process_uid(imap, uid, cfg.tenant, sources)
+                        if created:
+                            new_count += 1
+                        elif self.verbose:
+                            self.stdout.write(f"    UID {uid.decode()} ignoré — {reason}")
+                    except Exception as exc:
+                        self.stderr.write(f"    UID {uid} — erreur : {exc}")
+            except Exception as exc:
+                if self.verbose:
+                    self.stdout.write(f"  [{folder}] inaccessible — {exc}")
+
         imap.logout()
 
         cfg.last_polled_at = timezone.now()
