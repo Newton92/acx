@@ -18,15 +18,18 @@ Routes:
 """
 
 import imaplib
+import json
 import logging
 import mimetypes
 import os
 import socket
 import threading
+import time
 
 from django.contrib.auth import get_user_model
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, StreamingHttpResponse
 from django.utils import timezone
+from django.views.decorators.http import condition
 
 logger = logging.getLogger(__name__)
 from rest_framework import status
@@ -763,6 +766,70 @@ def _notify_dispatch(mail: IncomingMail, assignee):
         logger.info("_notify_dispatch: email sent successfully to %s", assignee.email)
     except Exception as exc:
         logger.error("_notify_dispatch: failed to send email to %s — %s", assignee.email, exc)
+
+
+# ─── SSE — flux temps réel (badge + inbox) ────────────────────────────────────
+
+@condition(etag_func=None)
+def mail_sse(request):
+    """
+    Server-Sent Events : pousse un événement JSON dès que le compteur 'pending'
+    change pour ce tenant/utilisateur. L'authentification se fait via le token
+    JWT passé en query param (?token=...) car EventSource ne supporte pas
+    les headers personnalisés.
+    """
+    from rest_framework_simplejwt.tokens import UntypedToken
+    from rest_framework_simplejwt.exceptions import TokenError
+    from django.http import HttpResponse
+
+    token_str = request.GET.get("token", "")
+    try:
+        validated = UntypedToken(token_str)
+        user_id = validated.payload.get("user_id")
+        user = get_user_model().objects.get(id=user_id, is_active=True)
+    except (TokenError, Exception):
+        return HttpResponse("Unauthorized", status=401)
+
+    membership = Membership.objects.filter(
+        user=user, status=Membership.Status.ACTIVE
+    ).select_related("tenant").first()
+    if not membership or not membership.tenant:
+        return HttpResponse("Forbidden", status=403)
+
+    tenant = membership.tenant
+    is_admin = _is_tenant_admin(membership)
+
+    def event_stream():
+        last_pending = -1
+        tick_count = 0
+        while True:
+            try:
+                base_qs = IncomingMail.objects.filter(tenant=tenant)
+                if not is_admin:
+                    base_qs = base_qs.filter(assigned_to=user)
+                pending = base_qs.filter(status="pending").count()
+
+                if pending != last_pending:
+                    last_pending = pending
+                    payload = json.dumps({"type": "update", "pending": pending})
+                    yield f"data: {payload}\n\n"
+
+                # Keep-alive toutes les 20s pour éviter le timeout Nginx
+                tick_count += 1
+                if tick_count % 2 == 0:
+                    yield ": ping\n\n"
+
+                time.sleep(10)
+            except GeneratorExit:
+                break
+            except Exception:
+                break
+
+    response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
+    response["Cache-Control"] = "no-cache"
+    response["X-Accel-Buffering"] = "no"   # désactive le buffer Nginx
+    response["Connection"] = "keep-alive"
+    return response
 
 
 # ─── Téléchargement sécurisé des pièces jointes ───────────────────────────────
