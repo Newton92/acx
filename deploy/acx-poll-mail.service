@@ -1,0 +1,14 @@
+[Unit]
+Description=ACX — Poll IMAP mail entrant
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+User=www-data
+WorkingDirectory=/var/www/html/acx
+EnvironmentFile=/var/www/html/acx/.env
+Environment=DJANGO_SETTINGS_MODULE=acx.settings_prod
+ExecStart=/var/www/html/acx/venv/bin/python manage.py poll_mail
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=acx-poll-mail
