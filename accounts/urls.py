@@ -15,8 +15,8 @@ from .views_tenant_users import tenant_users, tenant_user_update, tenant_user_to
 from .views_mail_config import (
     mail_imap_config, mail_imap_test, mail_imap_poll, mail_cron_status,
     mail_sources, mail_source_detail, mail_source_toggle,
-    mail_inbox, mail_inbox_detail,
-    mail_dispatch, mail_reject, mail_restore, mail_mark_processed,
+    mail_inbox, mail_inbox_stats, mail_inbox_detail,
+    mail_dispatch, mail_self_dispatch, mail_reject, mail_restore, mail_mark_processed,
     mail_country_managers, mail_attachment_download,
 )
 from .views_countries import (
@@ -191,8 +191,10 @@ urlpatterns = [
 
     # Mail entrant — inbox
     path("tenant/mail/inbox/", mail_inbox, name="tenant-mail-inbox"),
+    path("tenant/mail/inbox/stats/", mail_inbox_stats, name="tenant-mail-inbox-stats"),
     path("tenant/mail/inbox/<int:mail_id>/", mail_inbox_detail, name="tenant-mail-inbox-detail"),
     path("tenant/mail/inbox/<int:mail_id>/dispatch/", mail_dispatch, name="tenant-mail-dispatch"),
+    path("tenant/mail/inbox/<int:mail_id>/self-dispatch/", mail_self_dispatch, name="tenant-mail-self-dispatch"),
     path("tenant/mail/inbox/<int:mail_id>/reject/", mail_reject, name="tenant-mail-reject"),
     path("tenant/mail/inbox/<int:mail_id>/restore/", mail_restore, name="tenant-mail-restore"),
     path("tenant/mail/inbox/<int:mail_id>/processed/", mail_mark_processed, name="tenant-mail-processed"),

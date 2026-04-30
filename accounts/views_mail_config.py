@@ -134,7 +134,7 @@ def _mail_detail_payload(mail):
                 "content_type": a.content_type,
                 "size": a.size,
                 "url": a.file.url if a.file else None,
-                "download_url": f"/api/tenant/mail/attachments/{a.id}/download/",
+                "download_url": f"/tenant/mail/attachments/{a.id}/download/",
             }
             for a in mail.attachments.all()
         ],
@@ -430,6 +430,30 @@ def mail_source_toggle(request, source_id: int):
 
 
 # ─────────────────────────────────────────────────────────────
+# Stats légères (badge sidebar)
+# ─────────────────────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def mail_inbox_stats(request):
+    """Retourne uniquement les compteurs — endpoint léger pour le badge sidebar."""
+    actor_m = _get_active_membership(request.user)
+    if not actor_m or not actor_m.tenant:
+        return Response({"detail": "No active tenant."}, status=403)
+
+    base_qs = IncomingMail.objects.filter(tenant=actor_m.tenant)
+    if not _is_tenant_admin(actor_m):
+        base_qs = base_qs.filter(assigned_to=request.user)
+
+    return Response({
+        "pending":    base_qs.filter(status="pending").count(),
+        "dispatched": base_qs.filter(status="dispatched").count(),
+        "processed":  base_qs.filter(status="processed").count(),
+        "rejected":   base_qs.filter(status="rejected").count(),
+    })
+
+
+# ─────────────────────────────────────────────────────────────
 # Inbox — mails interceptés
 # ─────────────────────────────────────────────────────────────
 
@@ -636,6 +660,34 @@ def mail_mark_processed(request, mail_id: int):
     mail.status = IncomingMail.Status.PROCESSED
     mail.save(update_fields=["status", "updated_at"])
     return Response(_mail_list_payload(mail))
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def mail_self_dispatch(request, mail_id: int):
+    """Admin se dispatche le mail à lui-même."""
+    actor_m = _get_active_membership(request.user)
+    if not actor_m or not actor_m.tenant:
+        return Response({"detail": "No active tenant."}, status=403)
+    if not _is_tenant_admin(actor_m):
+        return Response({"detail": "Réservé aux admins."}, status=403)
+
+    try:
+        mail = IncomingMail.objects.select_related("mail_source").get(id=mail_id, tenant=actor_m.tenant)
+    except IncomingMail.DoesNotExist:
+        return Response({"detail": "Mail introuvable."}, status=404)
+
+    dispatch_note = (request.data.get("dispatch_note") or "").strip()
+
+    mail.assigned_to = request.user
+    mail.assigned_country = ""
+    mail.dispatched_by = request.user
+    mail.dispatched_at = timezone.now()
+    mail.dispatch_note = dispatch_note
+    mail.status = IncomingMail.Status.DISPATCHED
+    mail.save()
+
+    return Response(_mail_detail_payload(mail))
 
 
 # ─────────────────────────────────────────────────────────────
