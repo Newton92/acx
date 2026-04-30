@@ -4,8 +4,8 @@ Requires=acx-poll-mail.service
 
 [Timer]
 OnBootSec=60
-OnUnitActiveSec=5min
-AccuracySec=30s
+OnCalendar=*:0/5
+AccuracySec=10s
 Persistent=true
 
 [Install]
