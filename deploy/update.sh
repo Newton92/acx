@@ -48,6 +48,7 @@ fi
 
 # Toujours recréer le fichier cron (mise à jour du chemin si APP_DIR a changé)
 mkdir -p /var/log/acx
+chown www-data:www-data /var/log/acx
 cat > /etc/cron.d/acx-poll-mail << EOF
 # ACX — Polling IMAP des boîtes mail des tenants (toutes les 5 minutes)
 DJANGO_SETTINGS_MODULE=acx.settings_prod

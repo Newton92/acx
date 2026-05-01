@@ -88,6 +88,7 @@ systemctl reload apache2
 
 echo "=== Installation du cron job poll_mail (toutes les 5 min) ==="
 mkdir -p /var/log/acx
+chown www-data:www-data /var/log/acx
 
 # Fichier de cron dédié dans /etc/cron.d/
 cat > /etc/cron.d/acx-poll-mail << EOF
