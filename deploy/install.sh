@@ -20,16 +20,11 @@ fi
 echo "Python détecté : $PYTHON_BIN ($($PYTHON_BIN --version))"
 echo "Dossier projet : $APP_DIR"
 
-echo "=== [1/9] Mise à jour des paquets système ==="
-apt-get update -y
-apt-get install -y \
-    python3 python3-pip python3-venv python3-dev \
-    postgresql postgresql-contrib libpq-dev \
-    apache2 \
-    build-essential libssl-dev libffi-dev \
-    libcairo2 libpango-1.0-0 libpangocairo-1.0-0 \
-    libgdk-pixbuf2.0-0 shared-mime-info \
-    git curl
+echo "=== [1/9] Vérification des dépendances système ==="
+# apt-get update/upgrade retiré — la config réseau (routage vers 10.0.168.x)
+# est gérée manuellement par l'admin réseau et un apt upgrade peut la réinitialiser.
+# Lancer manuellement si nécessaire : apt-get install -y python3 python3-venv ...
+echo "  → Paquets système supposés déjà installés (apt désactivé)."
 
 echo "=== [2/9] Activation des modules Apache ==="
 a2enmod proxy proxy_http headers rewrite
