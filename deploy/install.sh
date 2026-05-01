@@ -95,6 +95,7 @@ cat > /etc/cron.d/acx-poll-mail << EOF
 # ACX — Polling IMAP des boîtes mail des tenants (toutes les 5 minutes)
 DJANGO_SETTINGS_MODULE=acx.settings_prod
 MPLBACKEND=Agg
+MPLCONFIGDIR=/tmp
 
 */5 * * * * www-data $APP_DIR/venv/bin/python $APP_DIR/manage.py poll_mail >> /var/log/acx/poll-mail.log 2>&1
 EOF
