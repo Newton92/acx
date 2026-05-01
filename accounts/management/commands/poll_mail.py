@@ -65,7 +65,8 @@ class Command(BaseCommand):
                 )
             except Exception as exc:
                 cfg.last_error = str(exc)
-                cfg.save(update_fields=["last_error"])
+                cfg.last_polled_at = timezone.now()
+                cfg.save(update_fields=["last_error", "last_polled_at"])
                 self.stderr.write(self.style.ERROR(f"  ✗ Erreur : {exc}"))
 
     # ─────────────────────────────────────────────────────────
@@ -77,6 +78,7 @@ class Command(BaseCommand):
                     "[Gmail]/Spam", "INBOX.Spam", "INBOX.Junk", "Bulk Mail"]
 
     def _poll_tenant(self, cfg: MailInboxConfig) -> int:
+        socket.setdefaulttimeout(30)  # 30 s max par opération réseau
         if cfg.use_ssl:
             imap = imaplib.IMAP4_SSL(cfg.imap_host, cfg.imap_port)
         else:

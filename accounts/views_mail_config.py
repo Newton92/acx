@@ -317,6 +317,10 @@ def mail_cron_status(request):
     if minutes is None:
         health = "stale"
         label = "En attente du premier passage"
+    elif cfg.last_error:
+        health = "error"
+        short_err = cfg.last_error[:80]
+        label = f"Erreur IMAP — {short_err}"
     elif minutes < 10:
         health = "healthy"
         label = f"Actif — dernier passage il y a {minutes} min"
