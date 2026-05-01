@@ -343,6 +343,15 @@ class IncomingMail(models.Model):
         related_name="dispatched_mails",
     )
     dispatch_note = models.TextField(blank=True)
+
+    # Acceptance par le responsable désigné
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    accepted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="accepted_mails",
+    )
+
     case = models.ForeignKey(
         "cases.Case", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="incoming_mails",

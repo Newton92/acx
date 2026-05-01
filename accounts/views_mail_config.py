@@ -129,6 +129,11 @@ def _mail_detail_payload(mail):
             "id": mail.dispatched_by_id,
             "name": str(mail.dispatched_by),
         } if mail.dispatched_by_id else None,
+        "accepted_at": mail.accepted_at,
+        "accepted_by": {
+            "id": mail.accepted_by_id,
+            "name": str(mail.accepted_by),
+        } if mail.accepted_by_id else None,
         "case": mail.case_id,
         "attachments": [
             {
@@ -687,8 +692,91 @@ def mail_self_dispatch(request, mail_id: int):
     mail.dispatched_by = request.user
     mail.dispatched_at = timezone.now()
     mail.dispatch_note = dispatch_note
+    mail.accepted_at = None
+    mail.accepted_by = None
     mail.status = IncomingMail.Status.DISPATCHED
     mail.save()
+
+    return Response(_mail_detail_payload(mail))
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def mail_accept(request, mail_id: int):
+    """Le responsable désigné accepte formellement le dossier."""
+    actor_m = _get_active_membership(request.user)
+    if not actor_m or not actor_m.tenant:
+        return Response({"detail": "No active tenant."}, status=403)
+
+    try:
+        mail = IncomingMail.objects.select_related(
+            "mail_source", "assigned_to", "dispatched_by", "accepted_by"
+        ).prefetch_related("attachments").get(id=mail_id, tenant=actor_m.tenant)
+    except IncomingMail.DoesNotExist:
+        return Response({"detail": "Mail introuvable."}, status=404)
+
+    if mail.status != IncomingMail.Status.DISPATCHED:
+        return Response({"detail": "Ce mail n'est pas en statut dispatché."}, status=400)
+
+    is_admin = _is_tenant_admin(actor_m)
+    is_assignee = mail.assigned_to_id == request.user.id
+    if not is_admin and not is_assignee:
+        return Response({"detail": "Vous n'êtes pas l'assigné de ce mail."}, status=403)
+
+    if not mail.accepted_at:
+        mail.accepted_at = timezone.now()
+        mail.accepted_by = request.user
+        mail.save(update_fields=["accepted_at", "accepted_by", "updated_at"])
+
+    return Response(_mail_detail_payload(mail))
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def mail_reassign(request, mail_id: int):
+    """Le responsable désigné réaffecte le dossier à un collègue."""
+    actor_m = _get_active_membership(request.user)
+    if not actor_m or not actor_m.tenant:
+        return Response({"detail": "No active tenant."}, status=403)
+
+    try:
+        mail = IncomingMail.objects.select_related("mail_source", "assigned_to").get(
+            id=mail_id, tenant=actor_m.tenant
+        )
+    except IncomingMail.DoesNotExist:
+        return Response({"detail": "Mail introuvable."}, status=404)
+
+    is_admin = _is_tenant_admin(actor_m)
+    is_assignee = mail.assigned_to_id == request.user.id
+    if not is_admin and not is_assignee:
+        return Response({"detail": "Vous n'êtes pas autorisé à réaffecter ce mail."}, status=403)
+
+    data = request.data or {}
+    new_assignee_id = data.get("assigned_to_id")
+    dispatch_note = (data.get("dispatch_note") or "").strip()
+
+    if not new_assignee_id:
+        return Response({"detail": "assigned_to_id est requis."}, status=400)
+
+    try:
+        new_m = Membership.objects.select_related("user").get(
+            tenant=actor_m.tenant, user_id=new_assignee_id, status=Membership.Status.ACTIVE
+        )
+    except Membership.DoesNotExist:
+        return Response({"detail": "Membre introuvable dans ce tenant."}, status=404)
+
+    mail.assigned_to = new_m.user
+    mail.dispatched_by = request.user
+    mail.dispatched_at = timezone.now()
+    mail.dispatch_note = dispatch_note
+    mail.accepted_at = None
+    mail.accepted_by = None
+    mail.status = IncomingMail.Status.DISPATCHED
+    mail.save()
+
+    threading.Thread(
+        target=_notify_dispatch, args=(mail, new_m.user), daemon=True
+    ).start()
 
     return Response(_mail_detail_payload(mail))
 
@@ -731,38 +819,157 @@ def mail_country_managers(request):
 # ─────────────────────────────────────────────────────────────
 
 def _notify_dispatch(mail: IncomingMail, assignee):
-    from django.core.mail import send_mail
+    from django.core.mail import EmailMultiAlternatives
     from django.conf import settings as dj_settings
 
     if not assignee.email:
         logger.warning("_notify_dispatch: assignee %s has no email, skipping.", assignee.username)
         return
 
-    subject = f"[ACX] Demande client assignée — {mail.subject[:80]}"
-    body = (
-        f"Bonjour {assignee.first_name or assignee.username},\n\n"
-        f"Un mail client vous a été assigné.\n\n"
-        f"De : {mail.from_email}\n"
-        f"Objet : {mail.subject}\n"
-        f"Pays : {mail.assigned_country or '—'}\n"
-        f"{('Note : ' + mail.dispatch_note + chr(10)) if mail.dispatch_note else ''}\n"
-        f"Connectez-vous à la plateforme ACX pour le traiter."
+    first_name = assignee.first_name or assignee.username
+    subject_line = f"[ACX] Demande client assignée — {mail.subject[:80]}"
+    country_label = mail.assigned_country or "—"
+    body_excerpt = (mail.body_text or "").strip()[:300]
+    if len(mail.body_text or "") > 300:
+        body_excerpt += "…"
+    note_block = f"\n    Note de dispatch : {mail.dispatch_note}\n" if mail.dispatch_note else ""
+
+    frontend_url = getattr(dj_settings, "FRONTEND_BASE_URL", "https://acx-acremac.net")
+    inbox_url = f"{frontend_url}/fr/mail-inbox"
+
+    # ── Texte brut (fallback) ────────────────────────────────
+    text_body = (
+        f"Bonjour {first_name},\n\n"
+        f"Un dossier client vous a été assigné sur la plateforme ACX.\n\n"
+        f"De      : {mail.from_name or mail.from_email} <{mail.from_email}>\n"
+        f"Objet   : {mail.subject}\n"
+        f"Pays    : {country_label}\n"
+        f"Reçu le : {mail.received_at.strftime('%d/%m/%Y à %H:%M')}\n"
+        f"{note_block}\n"
+        f"Aperçu :\n{body_excerpt}\n\n"
+        f"Connectez-vous pour consulter et prendre en charge ce dossier :\n{inbox_url}\n\n"
+        f"Cordialement,\nL'équipe ACX — ACREMAC"
     )
+
+    # ── HTML ─────────────────────────────────────────────────
+    note_html = (
+        f'<tr><td style="padding:10px 0 0"><div style="background:#fffbeb;border-left:3px solid '
+        f'#f59e0b;border-radius:4px;padding:10px 14px;font-size:13px;color:#92400e;">'
+        f'<strong>Note :</strong> {mail.dispatch_note}</div></td></tr>'
+    ) if mail.dispatch_note else ""
+
+    excerpt_html = (
+        f'<tr><td style="padding:14px 0 0"><p style="margin:0 0 6px;font-size:11px;'
+        f'font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;">Aperçu</p>'
+        f'<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 14px;'
+        f'font-size:13px;color:#475569;line-height:1.6;white-space:pre-wrap;">{body_excerpt}</div>'
+        f'</td></tr>'
+    ) if body_excerpt else ""
+
+    html_body = f"""<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+        <!-- Logo / header -->
+        <tr><td style="background:linear-gradient(135deg,#1e1b4b 0%,#312e81 100%);border-radius:12px 12px 0 0;padding:28px 32px;">
+          <table width="100%" cellpadding="0" cellspacing="0"><tr>
+            <td><span style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-.5px;">ACX</span>
+              <span style="font-size:13px;color:#a5b4fc;margin-left:8px;">ACREMAC</span></td>
+            <td align="right"><span style="background:rgba(255,255,255,.15);color:#c7d2fe;
+              font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;">Nouvelle demande</span></td>
+          </tr></table>
+        </td></tr>
+
+        <!-- Body -->
+        <tr><td style="background:#fff;padding:32px;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;">
+          <p style="margin:0 0 20px;font-size:16px;color:#1e293b;">
+            Bonjour <strong>{first_name}</strong>,
+          </p>
+          <p style="margin:0 0 24px;font-size:14px;color:#475569;line-height:1.6;">
+            Un dossier client vous a été assigné sur la plateforme <strong>ACX</strong>.
+            Veuillez en prendre connaissance et y donner suite dans les meilleurs délais.
+          </p>
+
+          <!-- Fiche mail -->
+          <table width="100%" cellpadding="0" cellspacing="0"
+            style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:0;">
+            <tr><td style="padding:16px 20px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding:4px 0;font-size:12px;color:#94a3b8;width:90px;">Expéditeur</td>
+                  <td style="padding:4px 0;font-size:13px;color:#1e293b;font-weight:600;">
+                    {mail.from_name or mail.from_email}
+                    {('<br><span style="font-weight:400;color:#64748b;font-size:12px;">' + mail.from_email + '</span>') if mail.from_name else ''}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 0;font-size:12px;color:#94a3b8;">Objet</td>
+                  <td style="padding:4px 0;font-size:13px;color:#1e293b;">{mail.subject or '(Sans objet)'}</td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 0;font-size:12px;color:#94a3b8;">Pays</td>
+                  <td style="padding:4px 0;font-size:13px;color:#1e293b;">{country_label}</td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 0;font-size:12px;color:#94a3b8;">Reçu le</td>
+                  <td style="padding:4px 0;font-size:13px;color:#1e293b;">
+                    {mail.received_at.strftime('%d/%m/%Y à %H:%M')}
+                  </td>
+                </tr>
+              </table>
+            </td></tr>
+          </table>
+
+          <table width="100%" cellpadding="0" cellspacing="0">
+            {note_html}
+            {excerpt_html}
+          </table>
+
+          <!-- CTA -->
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;">
+            <tr><td align="center">
+              <a href="{inbox_url}" target="_blank"
+                style="display:inline-block;background:linear-gradient(135deg,#1e1b4b 0%,#4f46e5 100%);
+                color:#fff;text-decoration:none;font-size:14px;font-weight:700;
+                padding:14px 32px;border-radius:8px;letter-spacing:.02em;">
+                Ouvrir le dossier →
+              </a>
+            </td></tr>
+          </table>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="background:#f8fafc;border:1px solid #e2e8f0;border-top:none;
+          border-radius:0 0 12px 12px;padding:20px 32px;text-align:center;">
+          <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.6;">
+            Cet email a été envoyé automatiquement par la plateforme ACX — ACREMAC.<br>
+            Ne pas répondre directement à cet email.
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
 
     logger.info(
         "_notify_dispatch: sending to %s via %s:%s",
-        assignee.email,
-        dj_settings.EMAIL_HOST,
-        dj_settings.EMAIL_PORT,
+        assignee.email, dj_settings.EMAIL_HOST, dj_settings.EMAIL_PORT,
     )
     try:
-        send_mail(
-            subject=subject,
-            message=body,
+        msg = EmailMultiAlternatives(
+            subject=subject_line,
+            body=text_body,
             from_email=dj_settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[assignee.email],
-            fail_silently=False,
+            to=[assignee.email],
         )
+        msg.attach_alternative(html_body, "text/html")
+        msg.send(fail_silently=False)
         logger.info("_notify_dispatch: email sent successfully to %s", assignee.email)
     except Exception as exc:
         logger.error("_notify_dispatch: failed to send email to %s — %s", assignee.email, exc)
