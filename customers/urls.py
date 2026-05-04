@@ -3,10 +3,11 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from .portal_views import customer_portal_me, CustomerPortalCaseViewSet
-from .views import CustomerViewSet
+from .views import CustomerViewSet, CreditorViewSet
 
 router = DefaultRouter()
 router.register(r"customers", CustomerViewSet, basename="customers")
+router.register(r"creditors", CreditorViewSet, basename="creditors")
 
 portal_router = DefaultRouter()
 portal_router.register(r"customer-portal/cases", CustomerPortalCaseViewSet, basename="customer-portal-cases")

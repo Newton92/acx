@@ -3,7 +3,7 @@ from django.apps import apps
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from .models import Customer, CustomerMembership
+from .models import Customer, CustomerMembership, Creditor
 
 User = get_user_model()
 
@@ -89,6 +89,33 @@ class CustomerSerializer(serializers.ModelSerializer):
             "status",
             "metadata",
             "portal_enabled",
+            "created_by",
+            "created_at",
+        ]
+        read_only_fields = ["id", "tenant", "created_by", "created_at"]
+
+
+class CreditorSerializer(serializers.ModelSerializer):
+    client_name = serializers.CharField(source="client.name", read_only=True, default=None)
+
+    class Meta:
+        model = Creditor
+        fields = [
+            "id",
+            "tenant",
+            "name",
+            "code",
+            "type",
+            "client",
+            "client_name",
+            "email",
+            "phone",
+            "country",
+            "city",
+            "address",
+            "tax_id",
+            "is_active",
+            "notes",
             "created_by",
             "created_at",
         ]

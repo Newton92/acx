@@ -32,12 +32,25 @@ class CollectionCaseSerializer(serializers.ModelSerializer):
     balance = serializers.DecimalField(max_digits=18, decimal_places=2, read_only=True)
     is_overdue = serializers.BooleanField(read_only=True)
 
+    # Lecture dénormalisée
+    customer_name = serializers.CharField(source="customer.name", read_only=True, default=None)
+    creditor_name = serializers.SerializerMethodField(read_only=True)
+
+    def get_creditor_name(self, obj):
+        if obj.creditor_id:
+            return obj.creditor.name
+        return obj.customer.name if obj.customer_id else None
+
     class Meta:
         model = CollectionCase
         fields = [
             "id",
             "tenant",
             "reference",
+            "customer",
+            "customer_name",
+            "creditor",
+            "creditor_name",
             "portfolio",
             "debtor",
             "status",

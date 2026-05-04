@@ -4,7 +4,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
-from customers.models import Customer
+from customers.models import Customer, Creditor
 from tenancy.models import Tenant
 
 
@@ -156,7 +156,19 @@ class Case(models.Model):
         CUSTOMER = "customer", "Customer"
 
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="cases")
+
+    # Client (donneur d'ordre du tenant) — toujours obligatoire
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name="cases_cus")
+
+    # Créancier réel (si différent du client, ex. client = assureur, créancier = entreprise assurée)
+    # Si null → le créancier est le client lui-même.
+    creditor = models.ForeignKey(
+        Creditor,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cases",
+    )
 
     portfolio = models.ForeignKey(Portfolio, on_delete=models.SET_NULL, null=True, blank=True, related_name="cases")
     debtor = models.ForeignKey(Debtor, on_delete=models.PROTECT, related_name="cases")
@@ -212,6 +224,11 @@ class Case(models.Model):
     class Meta:
         unique_together = ("tenant", "reference")
         ordering = ["-id"]
+
+    @property
+    def effective_creditor(self):
+        """Retourne le créancier explicite ou à défaut le client."""
+        return self.creditor if self.creditor_id else self.customer
 
     def __str__(self):
         return f"{self.reference} - {self.title}"

@@ -14,11 +14,13 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from accounts.tenant_context import get_active_tenant_for_user
-from .models import Customer, CustomerMembership
+from .models import Customer, CustomerMembership, Creditor
 from .serializers import (
     CustomerSerializer,
     CustomerMembershipSerializer,
-    CustomerMembershipUpdateSerializer, CustomerPortalMeSerializer,
+    CustomerMembershipUpdateSerializer,
+    CustomerPortalMeSerializer,
+    CreditorSerializer,
 )
 
 User = get_user_model()
@@ -330,6 +332,50 @@ class CustomerViewSet(ModelViewSet):
             resp["temporary_password"] = temp_password
 
         return Response(resp, status=status.HTTP_200_OK)
+
+
+class CreditorViewSet(ModelViewSet):
+    """
+    CRUD des créanciers du tenant.
+    Un créancier est l'entité réellement due par le débiteur.
+    Il peut être rattaché à un client (client FK) ou exister indépendamment.
+    """
+    serializer_class = CreditorSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        tenant = get_active_tenant_for_user(self.request.user)
+        if not tenant:
+            return Creditor.objects.none()
+        qs = Creditor.objects.select_related("client").filter(tenant=tenant)
+        # Filtres optionnels
+        client_id = self.request.query_params.get("client_id")
+        if client_id:
+            qs = qs.filter(client_id=client_id)
+        is_active = self.request.query_params.get("is_active")
+        if is_active in ("true", "false"):
+            qs = qs.filter(is_active=(is_active == "true"))
+        return qs
+
+    def perform_create(self, serializer):
+        tenant = get_active_tenant_for_user(self.request.user)
+        if not tenant:
+            raise PermissionDenied("No active tenant.")
+        serializer.save(tenant=tenant, created_by=self.request.user)
+
+    def destroy(self, request, *args, **kwargs):
+        creditor = self.get_object()
+        try:
+            creditor.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except ProtectedError:
+            return Response(
+                {
+                    "detail": "Ce créancier est lié à des dossiers et ne peut pas être supprimé.",
+                    "code": "protected",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
 
 
 class CustomerPortalMeView(APIView):

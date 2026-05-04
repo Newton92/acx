@@ -17,6 +17,8 @@ def get_model_ref(setting_name: str, default: str) -> str:
 TENANT_MODEL = get_model_ref("ACX_TENANT_MODEL", "tenancy.Tenant")
 PORTFOLIO_MODEL = get_model_ref("ACX_PORTFOLIO_MODEL", "portfolios.Portfolio")
 DEBTOR_MODEL = get_model_ref("ACX_DEBTOR_MODEL", "debtors.Debtor")
+CUSTOMER_MODEL = "customers.Customer"
+CREDITOR_MODEL = "customers.Creditor"
 
 
 class TimeStampedModel(models.Model):
@@ -77,6 +79,25 @@ class CollectionCase(TimeStampedModel):
     """
     tenant = models.ForeignKey(TENANT_MODEL, on_delete=models.CASCADE, related_name="collection_cases")
     reference = models.CharField(max_length=32, db_index=True)  # ex: COL-2026-000123
+
+    # Client donneur d'ordre (l'entreprise qui a confié ce dossier au tenant)
+    customer = models.ForeignKey(
+        CUSTOMER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="client_collection_cases",
+    )
+
+    # Créancier réel (si différent du client)
+    # Si null → le créancier est le client lui-même.
+    creditor = models.ForeignKey(
+        CREDITOR_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="creditor_collection_cases",
+    )
 
     portfolio = models.ForeignKey(
         PORTFOLIO_MODEL,
@@ -151,6 +172,11 @@ class CollectionCase(TimeStampedModel):
             models.Index(fields=["tenant", "status", "priority"]),
             models.Index(fields=["tenant", "next_action_date"]),
         ]
+
+    @property
+    def effective_creditor(self):
+        """Retourne le créancier explicite ou à défaut le client."""
+        return self.creditor if self.creditor_id else self.customer
 
     @property
     def total_due(self) -> Decimal:

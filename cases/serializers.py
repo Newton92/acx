@@ -5,7 +5,7 @@ from rest_framework.exceptions import ValidationError
 
 from accounts.tenant_context import get_active_tenant_for_user
 from cases.models import Portfolio, Debtor, Case, CaseNote, CaseDocument
-from customers.models import Customer
+from customers.models import Customer, Creditor
 
 User = get_user_model()
 
@@ -171,12 +171,15 @@ class CaseSerializer(serializers.ModelSerializer):
     debtor = DebtorSerializer(read_only=True)
     portfolio = PortfolioSerializer(read_only=True)
 
-    # Customer: id + nom en lecture.
+    # Client (donneur d'ordre) : id + nom
     customer = serializers.IntegerField(source="customer_id", read_only=True)
     customer_name = serializers.CharField(source="customer.name", read_only=True, default="")
 
+    # Créancier explicite (si différent du client) : id + nom
+    creditor = serializers.IntegerField(source="creditor_id", read_only=True, allow_null=True)
+    creditor_name = serializers.SerializerMethodField(read_only=True)
+
     assigned_to_username = serializers.CharField(source="assigned_to.username", read_only=True)
-    # assigned_to_id lisible ET writable (retire write_only pour que le GET renvoie l'id)
 
     # ---- WRITE (ids) ----
     customer_id = serializers.PrimaryKeyRelatedField(
@@ -185,6 +188,14 @@ class CaseSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False,
         allow_null=False,
+    )
+
+    creditor_id = serializers.PrimaryKeyRelatedField(
+        source="creditor",
+        queryset=Creditor.objects.all(),
+        write_only=True,
+        required=False,
+        allow_null=True,
     )
 
     debtor_id = serializers.PrimaryKeyRelatedField(
@@ -210,11 +221,15 @@ class CaseSerializer(serializers.ModelSerializer):
     )
 
 
+    def get_creditor_name(self, obj):
+        if obj.creditor_id:
+            return obj.creditor.name
+        # Si pas de créancier explicite, affiche le nom du client (= créancier par défaut)
+        return obj.customer.name if obj.customer_id else None
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Scope des querysets au tenant (quand possible) pour éviter qu'un tenant
-        # référence des objets d'un autre tenant.
         tenant = get_request_tenant(self)
         if tenant is None:
             return
@@ -231,6 +246,11 @@ class CaseSerializer(serializers.ModelSerializer):
 
         try:
             self.fields["customer_id"].queryset = _qs_for_tenant(Customer, tenant)
+        except Exception:
+            pass
+
+        try:
+            self.fields["creditor_id"].queryset = _qs_for_tenant(Creditor, tenant)
         except Exception:
             pass
 
@@ -253,12 +273,14 @@ class CaseSerializer(serializers.ModelSerializer):
             "customer",
             "customer_id",
             "customer_name",
+            "creditor",
+            "creditor_id",
+            "creditor_name",
             "debtor",
             "debtor_id",
             "assigned_to_id",
             "assigned_to_username",
             "metadata",
-            # ✅ utile portail client / audit (si présent dans le modèle)
             "created_source",
         ]
         read_only_fields = ["id", "opened_at", "created_source"]
