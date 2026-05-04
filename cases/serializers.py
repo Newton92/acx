@@ -282,6 +282,9 @@ class CaseSerializer(serializers.ModelSerializer):
             "assigned_to_username",
             "metadata",
             "created_source",
+            "notify_customer",
+            "notify_creditor",
+            "notify_debtor",
         ]
         read_only_fields = ["id", "opened_at", "created_source"]
 

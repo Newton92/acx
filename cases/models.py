@@ -219,6 +219,11 @@ class Case(models.Model):
         default=CreatedSource.TENANT
     )
 
+    # Notifications email par partie prenante
+    notify_customer = models.BooleanField(default=True)
+    notify_creditor = models.BooleanField(default=True)
+    notify_debtor = models.BooleanField(default=False)
+
     metadata = models.JSONField(blank=True, null=True)
 
     class Meta:

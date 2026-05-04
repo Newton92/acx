@@ -52,7 +52,7 @@ class Creditor(models.Model):
 
     Exemple : un assureur-crédit (Client) peut gérer des dossiers dont le créancier
     réel est l'entreprise assurée. Dans ce cas, Client ≠ Créancier.
-    Si le champ `client` est renseigné, le créancier est rattaché à ce client.
+    L'association client ↔ créancier se fait au niveau du dossier (Case), pas ici.
     """
 
     class Type(models.TextChoices):
@@ -64,16 +64,6 @@ class Creditor(models.Model):
     name = models.CharField(max_length=200)
     code = models.CharField(max_length=60, blank=True, null=True)
     type = models.CharField(max_length=12, choices=Type.choices, default=Type.COMPANY)
-
-    # Lien optionnel vers le client donneur d'ordre
-    # (null = créancier autonome, sans client intermédiaire)
-    client = models.ForeignKey(
-        Customer,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="creditors",
-    )
 
     email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=40, blank=True, null=True)

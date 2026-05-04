@@ -347,11 +347,7 @@ class CreditorViewSet(ModelViewSet):
         tenant = get_active_tenant_for_user(self.request.user)
         if not tenant:
             return Creditor.objects.none()
-        qs = Creditor.objects.select_related("client").filter(tenant=tenant)
-        # Filtres optionnels
-        client_id = self.request.query_params.get("client_id")
-        if client_id:
-            qs = qs.filter(client_id=client_id)
+        qs = Creditor.objects.filter(tenant=tenant)
         is_active = self.request.query_params.get("is_active")
         if is_active in ("true", "false"):
             qs = qs.filter(is_active=(is_active == "true"))

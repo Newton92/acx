@@ -96,8 +96,6 @@ class CustomerSerializer(serializers.ModelSerializer):
 
 
 class CreditorSerializer(serializers.ModelSerializer):
-    client_name = serializers.CharField(source="client.name", read_only=True, default=None)
-
     class Meta:
         model = Creditor
         fields = [
@@ -106,8 +104,6 @@ class CreditorSerializer(serializers.ModelSerializer):
             "name",
             "code",
             "type",
-            "client",
-            "client_name",
             "email",
             "phone",
             "country",

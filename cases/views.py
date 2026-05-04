@@ -269,6 +269,8 @@ class CaseViewSet(TenantScopedViewSet):
 
     def perform_update(self, serializer):
         tenant = self.get_tenant()
+        instance = serializer.instance
+        instance._updated_by = self.request.user
         obj = serializer.save()
 
         AuditLog.objects.create(
