@@ -5,6 +5,7 @@ from rest_framework.exceptions import ValidationError
 
 from accounts.tenant_context import get_active_tenant_for_user
 from cases.models import Portfolio, Debtor, Case, CaseNote, CaseDocument
+from cases.reference import generate_case_reference, get_country_for_user
 from customers.models import Customer, Creditor
 
 User = get_user_model()
@@ -286,7 +287,7 @@ class CaseSerializer(serializers.ModelSerializer):
             "notify_creditor",
             "notify_debtor",
         ]
-        read_only_fields = ["id", "opened_at", "created_source"]
+        read_only_fields = ["id", "reference", "opened_at", "created_source"]
 
     def validate(self, attrs):
         tenant = get_request_tenant(self)
@@ -338,9 +339,24 @@ class CaseSerializer(serializers.ModelSerializer):
                 raise ValidationError("Tenant non détecté sur la requête/contexte.")
             validated_data["tenant"] = tenant
 
+        tenant = validated_data["tenant"]
         user = getattr(request, "user", None) if request else None
         if user and user.is_authenticated:
             validated_data.setdefault("created_by", user)
+
+        # ── Génération de la référence ──────────────────────────────────────
+        # Priorité pays : débiteur > utilisateur connecté > tenant > "XX"
+        debtor = validated_data.get("debtor")
+        debtor_country = getattr(debtor, "country", None) if debtor else None
+
+        if debtor_country:
+            country_code = debtor_country.upper()
+        elif user and user.is_authenticated:
+            country_code = get_country_for_user(user, tenant)
+        else:
+            country_code = (tenant.country or "XX").upper()
+
+        validated_data["reference"] = generate_case_reference(tenant, country_code)
 
         return super().create(validated_data)
 

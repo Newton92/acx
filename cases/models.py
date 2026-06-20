@@ -239,6 +239,19 @@ class Case(models.Model):
         return f"{self.reference} - {self.title}"
 
 
+class CaseSequence(models.Model):
+    """Compteur séquentiel de références dossier par tenant et par période (YYYYMM)."""
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="case_sequences")
+    period = models.CharField(max_length=6)   # YYYYMM
+    last_number = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ("tenant", "period")
+
+    def __str__(self):
+        return f"{self.tenant} — {self.period} → {self.last_number}"
+
+
 class CaseNote(models.Model):
     case = models.ForeignKey(Case, on_delete=models.CASCADE, related_name="notes")
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
